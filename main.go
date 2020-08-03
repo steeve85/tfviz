@@ -6,7 +6,6 @@ import (
 	"io/ioutil"
 	"os"
 	"strings"
-	//"./aws"
 
 	tfconfigs "github.com/hashicorp/terraform/configs"
 	hcl2 "github.com/hashicorp/hcl/v2"
@@ -15,40 +14,67 @@ import (
 	"github.com/awalterschulze/gographviz"
 )
 
+// AwsVpc is a structure for AWS VPC resources
 type AwsVpc struct {
+	// The CIDR block for the VPC
 	CidrBlock				string `hcl:"cidr_block"`
+	// Other arguments
 	Remain     				hcl2.Body `hcl:",remain"`
 }
 
+// AwsSubnet is a structure for AWS Subnet resources
 type AwsSubnet struct {
+	// The CIDR block for the subnet
 	CidrBlock				string `hcl:"cidr_block"`
-	VpcId					string `hcl:"vpc_id"`
+	// The VPC ID
+	VpcID					string `hcl:"vpc_id"`
+	// Other arguments
 	Remain     				hcl2.Body `hcl:",remain"`
 }
 
+// AwsInstance is a structure for AWS EC2 instances resources
 type AwsInstance struct {
+	// The type of instance to start
 	InstanceType			string `hcl:"instance_type"`
+	// The AMI to use for the instance
 	AMI						string `hcl:"ami"`
+	// A list of security group names (EC2-Classic) or IDs (default VPC) to associate with
 	SecurityGroups			*[]string `hcl:"security_groups"`
+	// A list of security group IDs to associate with (VPC only)
 	VpcSecurityGroupIDs		*[]string `hcl:"vpc_security_group_ids"`
-	SubnetId				*string `hcl:"subnet_id"`
+	// The VPC Subnet ID to launch in
+	SubnetID				*string `hcl:"subnet_id"`
+	// Other arguments
 	Remain     				hcl2.Body `hcl:",remain"`
 }
 
+// AwsSecurityGroup is a structure for AWS Security Group resources
 type AwsSecurityGroup struct {
-	VpcId					*string `hcl:"vpc_id"`
-	Ingress					[]Ingress `hcl:"ingress,block"` // FIXME make it optional?
+	// The VPC ID
+	VpcID					*string `hcl:"vpc_id"`
+	// A list of ingress rules
+	Ingress					[]AwsIngress `hcl:"ingress,block"` // FIXME make it optional?
+	// Other arguments
 	Remain     				hcl2.Body `hcl:",remain"`
 }
 
-type Ingress struct {
+// AwsIngress is a structure for AWS Security Group ingress blocks
+type AwsIngress struct {
+	// The start port (or ICMP type number if protocol is "icmp" or "icmpv6")
 	FromPort				int `hcl:"from_port"`
+	// The end range port (or ICMP code if protocol is "icmp")
 	ToPort					int `hcl:"to_port"`
+	// If true, the security group itself will be added as a source to this ingress rule
 	Self					*bool `hcl:"self"`
+	// The protocol.  icmp, icmpv6, tcp, udp, "-1" (all)
 	Protocol				string `hcl:"protocol"`
+	// List of CIDR blocks
 	CidrBlocks				*[]string `hcl:"cidr_blocks"`
+	// List of IPv6 CIDR blocks
 	IPv6CidrBlocks			*[]string `hcl:"ipv6_cidr_blocks"`
+	// List of security group Group Names if using EC2-Classic, or Group IDs if using a VPC
 	SecurityGroups			*[]string `hcl:"security_groups"`
+	// Other arguments
 	Remain     				hcl2.Body `hcl:",remain"`
 }
 
@@ -115,33 +141,33 @@ func initiateGraph() (*gographviz.Escape, error) {
 
 func initiateVariablesAndResources(file *tfconfigs.Module) (*hcl2.EvalContext) {
 	// Create map for EvalContext to replace variables names by their values inside HCL file using DecodeBody
-	ctx_variables := make(map[string]cty.Value)
-	ctx_aws_vpc := make(map[string]cty.Value)
-	ctx_aws_subnet := make(map[string]cty.Value)
-	ctx_aws_instance := make(map[string]cty.Value)
-	ctx_aws_security_group := make(map[string]cty.Value)
+	ctxVariables := make(map[string]cty.Value)
+	ctxAwsVpc := make(map[string]cty.Value)
+	ctxAwsSubnet := make(map[string]cty.Value)
+	ctxAwsInstance := make(map[string]cty.Value)
+	ctxAwsSecurityGroup := make(map[string]cty.Value)
 
 	// Prepare context with TF variables
 	for _, v := range file.Variables {
-		ctx_variables[v.Name] = v.Default
+		ctxVariables[v.Name] = v.Default
 	}
 
 	// Prepare context with named values to resources
 	for _, v := range file.ManagedResources {
 		if v.Type == "aws_vpc" {
-			ctx_aws_vpc[v.Name] = cty.ObjectVal(map[string]cty.Value{
+			ctxAwsVpc[v.Name] = cty.ObjectVal(map[string]cty.Value{
 				"id":    cty.StringVal(v.Type + "." + v.Name),
 				})
 		} else if v.Type == "aws_subnet" {
-			ctx_aws_subnet[v.Name] = cty.ObjectVal(map[string]cty.Value{
+			ctxAwsSubnet[v.Name] = cty.ObjectVal(map[string]cty.Value{
 				"id":    cty.StringVal(v.Type + "." + v.Name),
 				})
 		} else if v.Type == "aws_instance" {
-			ctx_aws_instance[v.Name] = cty.ObjectVal(map[string]cty.Value{
+			ctxAwsInstance[v.Name] = cty.ObjectVal(map[string]cty.Value{
 				"id":    cty.StringVal(v.Type + "." + v.Name),
 				})
 		} else if v.Type == "aws_security_group" {
-			ctx_aws_security_group[v.Name] = cty.ObjectVal(map[string]cty.Value{
+			ctxAwsSecurityGroup[v.Name] = cty.ObjectVal(map[string]cty.Value{
 				"id":    cty.StringVal(v.Type + "." + v.Name),
 				})
 		}
@@ -149,31 +175,31 @@ func initiateVariablesAndResources(file *tfconfigs.Module) (*hcl2.EvalContext) {
 	
 	ctx := &hcl2.EvalContext{
 		Variables: map[string]cty.Value{
-			"var": cty.ObjectVal(ctx_variables),
-			"aws_vpc" : cty.ObjectVal(ctx_aws_vpc),
-			"aws_subnet" : cty.ObjectVal(ctx_aws_subnet),
-			"aws_instance" : cty.ObjectVal(ctx_aws_instance),
-			"aws_security_group" : cty.ObjectVal(ctx_aws_security_group),
+			"var": cty.ObjectVal(ctxVariables),
+			"aws_vpc" : cty.ObjectVal(ctxAwsVpc),
+			"aws_subnet" : cty.ObjectVal(ctxAwsSubnet),
+			"aws_instance" : cty.ObjectVal(ctxAwsInstance),
+			"aws_security_group" : cty.ObjectVal(ctxAwsSecurityGroup),
 		},
 	}
 	return ctx
 }
 
-type Aws struct {
+type aws struct {
 	AwsSecurityGroups 	map[string][]string
 	Cidr				map[string]string
 }
 
 // This function creates Graphviz nodes from the TF file 
-func (a *Aws) createGraphNodes(file *tfconfigs.Module, ctx *hcl2.EvalContext, graph *gographviz.Escape) (error) {
+func (a *aws) createGraphNodes(file *tfconfigs.Module, ctx *hcl2.EvalContext, graph *gographviz.Escape) (error) {
 	// HCL parsing with extrapolated variables
 	for _, v := range file.ManagedResources {
 		if v.Type == "aws_vpc" {
-			var aws_vpc AwsVpc
-			diags := gohcl.DecodeBody(v.Config, ctx, &aws_vpc)
+			var awsVpc AwsVpc
+			diags := gohcl.DecodeBody(v.Config, ctx, &awsVpc)
 			printDiags(diags)
 
-			a.Cidr[aws_vpc.CidrBlock] = v.Type+"_"+v.Name
+			a.Cidr[awsVpc.CidrBlock] = v.Type+"_"+v.Name
 
 			// Creating VPC boxes
 			err := graph.AddSubGraph("G", "cluster_"+v.Type+"_"+v.Name, map[string]string{
@@ -194,14 +220,14 @@ func (a *Aws) createGraphNodes(file *tfconfigs.Module, ctx *hcl2.EvalContext, gr
 				return err
 			}
 		} else if v.Type == "aws_subnet" {
-			var aws_subnet AwsSubnet
-			diags := gohcl.DecodeBody(v.Config, ctx, &aws_subnet)
+			var awsSubnet AwsSubnet
+			diags := gohcl.DecodeBody(v.Config, ctx, &awsSubnet)
 			printDiags(diags)
 
-			a.Cidr[aws_subnet.CidrBlock] = v.Type+"_"+v.Name
+			a.Cidr[awsSubnet.CidrBlock] = v.Type+"_"+v.Name
 
 			// Creating subnet boxes
-			err := graph.AddSubGraph("cluster_"+strings.Replace(aws_subnet.VpcId, ".", "_", -1), "cluster_"+v.Type+"_"+v.Name, map[string]string{
+			err := graph.AddSubGraph("cluster_"+strings.Replace(awsSubnet.VpcID, ".", "_", -1), "cluster_"+v.Type+"_"+v.Name, map[string]string{
 				"label": "Subnet: "+v.Name,
 			})
 			if err != nil {
@@ -219,12 +245,12 @@ func (a *Aws) createGraphNodes(file *tfconfigs.Module, ctx *hcl2.EvalContext, gr
 				return err
 			}
 		} else if v.Type == "aws_instance" {
-			var aws_instance AwsInstance
-			diags := gohcl.DecodeBody(v.Config, ctx, &aws_instance)
+			var awsInstance AwsInstance
+			diags := gohcl.DecodeBody(v.Config, ctx, &awsInstance)
 			printDiags(diags)
 
 			// Creating Instance nodes			
-			err := graph.AddNode("cluster_"+strings.Replace(*aws_instance.SubnetId, ".", "_", -1), v.Type+"_"+v.Name, map[string]string{
+			err := graph.AddNode("cluster_"+strings.Replace(*awsInstance.SubnetID, ".", "_", -1), v.Type+"_"+v.Name, map[string]string{
 				"style": "filled",
 			})
 			if err != nil {
@@ -237,16 +263,16 @@ func (a *Aws) createGraphNodes(file *tfconfigs.Module, ctx *hcl2.EvalContext, gr
 }
 
 // This function prepares a map of Security Groups
-func (a *Aws) prepareSecurityGroups(file *tfconfigs.Module, ctx *hcl2.EvalContext) {
+func (a *aws) prepareSecurityGroups(file *tfconfigs.Module, ctx *hcl2.EvalContext) {
 	// HCL parsing with extrapolated variables
 	for _, v := range file.ManagedResources {
 		if v.Type == "aws_security_group" {
-			var aws_security_group AwsSecurityGroup
-			diags := gohcl.DecodeBody(v.Config, ctx, &aws_security_group)
+			var awsSecurityGroup AwsSecurityGroup
+			diags := gohcl.DecodeBody(v.Config, ctx, &awsSecurityGroup)
 			printDiags(diags)
 
 			var SGs []string
-			for _,sg := range aws_security_group.Ingress {
+			for _,sg := range awsSecurityGroup.Ingress {
 				if sg.CidrBlocks != nil {
 					SGs = append(SGs, *sg.CidrBlocks...)
 				}
@@ -262,22 +288,22 @@ func (a *Aws) prepareSecurityGroups(file *tfconfigs.Module, ctx *hcl2.EvalContex
 	}
 }
 
-func (a *Aws) createGraphEdges(file *tfconfigs.Module, ctx *hcl2.EvalContext, graph *gographviz.Escape) (error) {
+func (a *aws) createGraphEdges(file *tfconfigs.Module, ctx *hcl2.EvalContext, graph *gographviz.Escape) (error) {
 	// HCL parsing with extrapolated variables
 	for _, v := range file.ManagedResources {
 		
 		if v.Type == "aws_instance" {
-			var aws_instance AwsInstance
-			diags := gohcl.DecodeBody(v.Config, ctx, &aws_instance)
+			var awsInstance AwsInstance
+			diags := gohcl.DecodeBody(v.Config, ctx, &awsInstance)
 			printDiags(diags)
 
 			// Get Security Groups of the AWS instance
 			var SGs []string
-			if aws_instance.SecurityGroups != nil {
-				SGs = append(SGs, *aws_instance.SecurityGroups...)
+			if awsInstance.SecurityGroups != nil {
+				SGs = append(SGs, *awsInstance.SecurityGroups...)
 			}
-			if aws_instance.VpcSecurityGroupIDs != nil {
-				SGs = append(SGs, *aws_instance.VpcSecurityGroupIDs...)
+			if awsInstance.VpcSecurityGroupIDs != nil {
+				SGs = append(SGs, *awsInstance.VpcSecurityGroupIDs...)
 			}
 
 			for _, sg := range SGs {
@@ -313,7 +339,7 @@ func main() {
 	ctx := initiateVariablesAndResources(tfModule)
 	graph, _ := initiateGraph()
 
-	tfAws := &Aws{
+	tfAws := &aws{
 		AwsSecurityGroups:	make(map[string][]string),
 		Cidr:				make(map[string]string),
 	}
