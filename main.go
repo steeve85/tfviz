@@ -95,6 +95,7 @@ func printDiags(diags hcl2.Diagnostics) {
 }
 
 func saveDotFile(dotfile string, graph *gographviz.Escape) error {
+	fmt.Println("Exporting Graph to", dotfile, "DOT file.")
 	err := ioutil.WriteFile(dotfile, []byte(graph.String()), 0644)
 	return err
 }
@@ -110,10 +111,12 @@ func parseTFfile(configpath string) (*tfconfigs.Module, error) {
 	
 	switch {
 	  case f.IsDir():
+		fmt.Println("Parsing", configpath, "Terraform module...")
 		module, diags := tfparser.LoadConfigDir(configpath)
 		printDiags(diags)
 		return module, nil
 	  default:
+		fmt.Println("Parsing", configpath, "Terraform file...")
 		file, diags := tfparser.LoadConfigFile(configpath)
 		printDiags(diags)
 		module, diags := tfconfigs.NewModule([]*tfconfigs.File{file}, nil)
@@ -332,12 +335,15 @@ func main() {
 		os.Exit(1)
 	}
 
-	// DEBUG
-	fmt.Println("DEBUG - CLI args: \nInput:", *inputFlag, "\nOutput:", *outputFlag)
-	
-	tfModule, _ := parseTFfile(*inputFlag)
+	tfModule, err := parseTFfile(*inputFlag)
+	if err != nil {
+		os.Exit(1)
+	}
 	ctx := initiateVariablesAndResources(tfModule)
-	graph, _ := initiateGraph()
+	graph, err := initiateGraph()
+	if err != nil {
+		os.Exit(1)
+	}
 
 	tfAws := &aws{
 		AwsSecurityGroups:	make(map[string][]string),
