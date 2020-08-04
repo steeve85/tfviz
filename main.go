@@ -112,14 +112,25 @@ func parseTFfile(configpath string) (*tfconfigs.Module, error) {
 	switch {
 	  case f.IsDir():
 		fmt.Println("Parsing", configpath, "Terraform module...")
+		if tfparser.IsConfigDir(configpath) == false {
+			err := fmt.Errorf("[ERROR] Directory %s does not contain valid Terraform configuration files", configpath)
+			fmt.Println(err.Error())
+			return nil, err
+		}
 		module, diags := tfparser.LoadConfigDir(configpath)
 		printDiags(diags)
 		return module, nil
 	  default:
 		fmt.Println("Parsing", configpath, "Terraform file...")
 		file, diags := tfparser.LoadConfigFile(configpath)
-		printDiags(diags)
-		module, diags := tfconfigs.NewModule([]*tfconfigs.File{file}, nil)
+		// Return error if the TF file doesn't contain resources
+		if len(file.ManagedResources) == 0 {
+			err := fmt.Errorf("[ERROR] File %s does not contain valid Terraform configuration", configpath)
+			fmt.Println(err.Error())
+			return nil, err
+		}
+		module, moreDiags := tfconfigs.NewModule([]*tfconfigs.File{file}, nil)
+		diags = append(diags, moreDiags...)
 		printDiags(diags)
 		return module, nil
 	}
