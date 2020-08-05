@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"os/exec"
 	"strings"
 
 	tfconfigs "github.com/hashicorp/terraform/configs"
@@ -13,6 +14,8 @@ import (
 	"github.com/zclconf/go-cty/cty"
 	"github.com/awalterschulze/gographviz"
 )
+
+var exportFormats = []string{"dot", "jpeg", "pdf", "png"}
 
 // AwsVpc is a structure for AWS VPC resources
 type AwsVpc struct {
@@ -94,10 +97,25 @@ func printDiags(diags hcl2.Diagnostics) {
 	}
 }
 
-func saveDotFile(dotfile string, graph *gographviz.Escape) error {
-	fmt.Println("Exporting Graph to", dotfile, "DOT file.")
-	err := ioutil.WriteFile(dotfile, []byte(graph.String()), 0644)
-	return err
+func exportGraphToFile(outputPath string, outputFormat string, graph *gographviz.Escape) error {
+	fmt.Println("Exporting Graph to", outputPath)
+	if outputFormat == "dot" {
+		err := ioutil.WriteFile(outputPath, []byte(graph.String()), 0644)
+		if err != nil {
+			fmt.Println(err.Error())
+			return err
+		}
+	} else {
+		tFlag := fmt.Sprintf("-T%s", outputFormat)
+		cmd := exec.Command("dot", tFlag, "-o", outputPath)
+		cmd.Stdin = strings.NewReader(graph.String())
+		err := cmd.Run()
+		if err != nil {
+			fmt.Println(err.Error())
+			return err
+		}
+	}
+	return nil
 }
 
 func parseTFfile(configpath string) (*tfconfigs.Module, error) {
@@ -108,7 +126,7 @@ func parseTFfile(configpath string) (*tfconfigs.Module, error) {
 	}
 
 	tfparser := tfconfigs.NewParser(nil)
-	
+
 	switch {
 	  case f.IsDir():
 		fmt.Println("Parsing", configpath, "Terraform module...")
@@ -336,13 +354,32 @@ func (a *aws) createGraphEdges(file *tfconfigs.Module, ctx *hcl2.EvalContext, gr
 	return nil
 }
 
+// Find takes a slice and looks for an element in it. If found it will
+// return it's key, otherwise it will return -1 and a bool of false.
+// https://golangcode.com/check-if-element-exists-in-slice/
+func Find(slice []string, val string) (int, bool) {
+    for i, item := range slice {
+        if item == val {
+            return i, true
+        }
+    }
+    return -1, false
+}
 
 func main() {
 	inputFlag := flag.String("input", ".", "Path to Terraform file or directory ")
-	outputFlag := flag.String("output", "tfviz.dot", "Path to the exported Dot file")
+	outputFlag := flag.String("output", "tfviz", "Path to the exported file")
+	formatFlag := flag.String("format", "png", "Format for the output file: dot, jpeg, pdf, png")
 	flag.Parse()
 
-	// if output file exists, exit
+	// checking that export format is supported
+	_, found := Find(exportFormats, *formatFlag)
+	if !found {
+		fmt.Printf("[ERROR] File format %s is not supported. Quitting...\n", *formatFlag)
+		os.Exit(1)
+	}
+
+	// check that the export path does not already exist
 	if _, err := os.Stat(*outputFlag); err == nil {
 		fmt.Printf("[ERROR] File %s already exists. Quitting...\n", *outputFlag)
 		os.Exit(1)
@@ -368,5 +405,5 @@ func main() {
 	tfAws.prepareSecurityGroups(tfModule, ctx)
 	tfAws.createGraphEdges(tfModule, ctx, graph)
 	
-	saveDotFile(*outputFlag, graph)
+	exportGraphToFile(*outputFlag, *formatFlag, graph)
 }
