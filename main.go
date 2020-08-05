@@ -206,6 +206,8 @@ type aws struct {
 
 // This function creates Graphviz nodes from the TF file 
 func (a *aws) createGraphNodes(file *tfconfigs.Module, ctx *hcl2.EvalContext, graph *gographviz.Escape) (error) {
+	// Setting CIDR for public network (Internet)
+	a.Cidr["0.0.0.0/0"] = "Internet"
 	// HCL parsing with extrapolated variables
 	for _, v := range file.ManagedResources {
 		if v.Type == "aws_vpc" {
@@ -348,6 +350,7 @@ func main() {
 
 	tfModule, err := parseTFfile(*inputFlag)
 	if err != nil {
+		// invalid input directory/file
 		os.Exit(1)
 	}
 	ctx := initiateVariablesAndResources(tfModule)
@@ -364,6 +367,6 @@ func main() {
 	tfAws.createGraphNodes(tfModule, ctx, graph)
 	tfAws.prepareSecurityGroups(tfModule, ctx)
 	tfAws.createGraphEdges(tfModule, ctx, graph)
-
+	
 	saveDotFile(*outputFlag, graph)
 }
