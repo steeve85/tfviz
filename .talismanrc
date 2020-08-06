@@ -1,4 +1,7 @@
 fileignoreconfig:
 - filename: go.sum
   ignore_detectors: [filecontent]
+- filename: tests/tf_0.12/ankyit/main.tf
+  checksum: 59a5ff1393025923718332e5a6425e045492d2baf4dd2e312bfbd7186253f350
+  ignore_detectors: []
 scopeconfig: []
