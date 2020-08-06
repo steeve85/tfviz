@@ -100,7 +100,7 @@ func printDiags(diags hcl2.Diagnostics) {
 	}
 }
 
-func exportGraphToFile(outputPath string, outputFormat string, graph *gographviz.Escape) error {
+func ExportGraphToFile(outputPath string, outputFormat string, graph *gographviz.Escape) error {
 	fmt.Println("Exporting Graph to", outputPath)
 	if outputFormat == "dot" {
 		err := ioutil.WriteFile(outputPath, []byte(graph.String()), 0644)
@@ -121,7 +121,7 @@ func exportGraphToFile(outputPath string, outputFormat string, graph *gographviz
 	return nil
 }
 
-func parseTFfile(configpath string) (*tfconfigs.Module, error) {
+func ParseTFfile(configpath string) (*tfconfigs.Module, error) {
 	f, err := os.Stat(configpath);
 	if err != nil {
 		printError(err)
@@ -157,7 +157,7 @@ func parseTFfile(configpath string) (*tfconfigs.Module, error) {
 	}
 }
 
-func initiateGraph() (*gographviz.Escape, error) {
+func InitiateGraph() (*gographviz.Escape, error) {
 	// Graph initialization
 	g := gographviz.NewEscape()
 	g.SetName("G")
@@ -174,7 +174,7 @@ func initiateGraph() (*gographviz.Escape, error) {
 	return g, nil
 }
 
-func initiateVariablesAndResources(file *tfconfigs.Module) (*hcl2.EvalContext) {
+func InitiateVariablesAndResources(file *tfconfigs.Module) (*hcl2.EvalContext) {
 	// Create map for EvalContext to replace variables names by their values inside HCL file using DecodeBody
 	ctxVariables := make(map[string]cty.Value)
 	ctxAwsVpc := make(map[string]cty.Value)
@@ -226,7 +226,7 @@ type aws struct {
 }
 
 // This function creates Graphviz nodes from the TF file 
-func (a *aws) createGraphNodes(file *tfconfigs.Module, ctx *hcl2.EvalContext, graph *gographviz.Escape) (error) {
+func (a *aws) CreateGraphNodes(file *tfconfigs.Module, ctx *hcl2.EvalContext, graph *gographviz.Escape) (error) {
 	// Setting CIDR for public network (Internet)
 	a.Cidr["0.0.0.0/0"] = "Internet"
 	// HCL parsing with extrapolated variables
@@ -300,7 +300,7 @@ func (a *aws) createGraphNodes(file *tfconfigs.Module, ctx *hcl2.EvalContext, gr
 }
 
 // This function prepares a map of Security Groups
-func (a *aws) prepareSecurityGroups(file *tfconfigs.Module, ctx *hcl2.EvalContext) {
+func (a *aws) PrepareSecurityGroups(file *tfconfigs.Module, ctx *hcl2.EvalContext) {
 	// HCL parsing with extrapolated variables
 	for _, v := range file.ManagedResources {
 		if v.Type == "aws_security_group" {
@@ -325,7 +325,7 @@ func (a *aws) prepareSecurityGroups(file *tfconfigs.Module, ctx *hcl2.EvalContex
 	}
 }
 
-func (a *aws) createGraphEdges(file *tfconfigs.Module, ctx *hcl2.EvalContext, graph *gographviz.Escape) (error) {
+func (a *aws) CreateGraphEdges(file *tfconfigs.Module, ctx *hcl2.EvalContext, graph *gographviz.Escape) (error) {
 	// HCL parsing with extrapolated variables
 	for _, v := range file.ManagedResources {
 		
@@ -390,13 +390,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	tfModule, err := parseTFfile(*inputFlag)
+	tfModule, err := ParseTFfile(*inputFlag)
 	if err != nil {
 		// invalid input directory/file
 		os.Exit(1)
 	}
-	ctx := initiateVariablesAndResources(tfModule)
-	graph, err := initiateGraph()
+	ctx := InitiateVariablesAndResources(tfModule)
+	graph, err := InitiateGraph()
 	if err != nil {
 		os.Exit(1)
 	}
@@ -406,9 +406,9 @@ func main() {
 		Cidr:				make(map[string]string),
 	}
 	
-	tfAws.createGraphNodes(tfModule, ctx, graph)
-	tfAws.prepareSecurityGroups(tfModule, ctx)
-	tfAws.createGraphEdges(tfModule, ctx, graph)
+	tfAws.CreateGraphNodes(tfModule, ctx, graph)
+	tfAws.PrepareSecurityGroups(tfModule, ctx)
+	tfAws.CreateGraphEdges(tfModule, ctx, graph)
 	
-	exportGraphToFile(*outputFlag, *formatFlag, graph)
+	ExportGraphToFile(*outputFlag, *formatFlag, graph)
 }
