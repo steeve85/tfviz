@@ -15,6 +15,7 @@ import (
 	"github.com/awalterschulze/gographviz"
 )
 
+var ignorewarnings bool
 var exportFormats = []string{"dot", "jpeg", "pdf", "png"}
 
 // AwsVpc is a structure for AWS VPC resources
@@ -87,12 +88,14 @@ func printError(err error) {
 }
 
 func printDiags(diags hcl2.Diagnostics) {
-	if len(diags) == 1 {
-		fmt.Println("[WARNING] Diagnostics:", diags[0].Error())
-	} else if len(diags) > 1 {
-		fmt.Println("[WARNING] Diagnostics:")
-		for _, d := range diags {
-			fmt.Println("\t", d.Error())
+	if !ignorewarnings {
+		if len(diags) == 1 {
+			fmt.Println("[WARNING] Diagnostics:", diags[0].Error())
+		} else if len(diags) > 1 {
+			fmt.Println("[WARNING] Diagnostics:")
+			for _, d := range diags {
+				fmt.Println("\t", d.Error())
+			}
 		}
 	}
 }
@@ -306,15 +309,15 @@ func (a *aws) prepareSecurityGroups(file *tfconfigs.Module, ctx *hcl2.EvalContex
 			printDiags(diags)
 
 			var SGs []string
-			for _,sg := range awsSecurityGroup.Ingress {
-				if sg.CidrBlocks != nil {
-					SGs = append(SGs, *sg.CidrBlocks...)
+			for _, ingress := range awsSecurityGroup.Ingress {
+				if ingress.CidrBlocks != nil {
+					SGs = append(SGs, *ingress.CidrBlocks...)
 				}
-				if sg.IPv6CidrBlocks != nil {
-					SGs = append(SGs, *sg.IPv6CidrBlocks...)
+				if ingress.IPv6CidrBlocks != nil {
+					SGs = append(SGs, *ingress.IPv6CidrBlocks...)
 				}
-				if sg.SecurityGroups != nil {
-					SGs = append(SGs, *sg.SecurityGroups...)
+				if ingress.SecurityGroups != nil {
+					SGs = append(SGs, *ingress.SecurityGroups...)
 				}
 			}
 			a.AwsSecurityGroups["aws_security_group." + v.Name] = SGs
@@ -368,8 +371,10 @@ func Find(slice []string, val string) (int, bool) {
 
 func main() {
 	inputFlag := flag.String("input", ".", "Path to Terraform file or directory ")
-	outputFlag := flag.String("output", "tfviz", "Path to the exported file")
+	outputFlag := flag.String("output", "tfviz.bin", "Path to the exported file")
 	formatFlag := flag.String("format", "png", "Format for the output file: dot, jpeg, pdf, png")
+	//warningFlag := flag.Bool("ignorewarnings", false, "Set to ignore warning messages")
+	flag.BoolVar(&ignorewarnings, "ignorewarnings", false, "Set to ignore warning messages")
 	flag.Parse()
 
 	// checking that export format is supported
