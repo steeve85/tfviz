@@ -54,12 +54,13 @@ func TestAwsEc2Instance(t *testing.T) {
 
 	tfAws.DefaultVpcSubnet(tfModule, graph)
 	tfAws.CreateGraphNodes(tfModule, ctx, graph)
-	if len(graph.Nodes.Nodes) != 2 {
+	
+	if len(graph.Nodes.Nodes) != 4 {
 		t.Errorf("CreateGraphNodes: Incorrect number of nodes")
 	}
 
 	// Checking graph export
-	outputPath := fmt.Sprintf("/tmp/tfviz_testing_%d", rand.Intn(100000))
+	outputPath := fmt.Sprintf("/tmp/tfviz_TestAwsEc2Instance_%d.png", rand.Intn(100000))
 	err = utils.ExportGraphToFile(outputPath, "png", graph)
 	if err != nil {
 		t.Errorf(err.Error())
@@ -115,7 +116,7 @@ func TestVpcSubnetEc2(t *testing.T) {
 	}
 
 	// Checking graph export
-	outputPath := fmt.Sprintf("/tmp/tfviz_testing_%d", rand.Intn(100000))
+	outputPath := fmt.Sprintf("/tmp/tfviz_TestVpcSubnetEc2_%d.png", rand.Intn(100000))
 	err = utils.ExportGraphToFile(outputPath, "png", graph)
 	if err != nil {
 		t.Errorf(err.Error())
