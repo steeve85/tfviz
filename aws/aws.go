@@ -127,6 +127,65 @@ func InitiateVariablesAndResources(file *tfconfigs.Module) (*hcl2.EvalContext) {
 	return ctx
 }
 
+// This function creates default VPC/Subnet if they don't exist
+func (a *AwsTemp) DefaultVpcSubnet(file *tfconfigs.Module, graph *gographviz.Escape) (error) {
+	var vpc, subnet bool
+	for _, v := range file.ManagedResources {
+		if v.Type == "aws_vpc" {
+			vpc = true
+		} else if v.Type == "aws_subnet" {
+			subnet = true
+		}
+	}
+
+	if !vpc {
+		// Creating default VPC boxe
+		err := graph.AddSubGraph("G", "cluster_aws_vpc_default", map[string]string{
+			"label": "VPC: default",
+		})
+		if err != nil {
+			utils.PrintError(err)
+			return err
+		}
+		// Adding invisible node to VPC for links
+		err = graph.AddNode("cluster_aws_vpc_default", "aws_vpc_default", map[string]string{
+			"shape": "point",
+			"style": "invis",
+		})
+		if err != nil {
+			utils.PrintError(err)
+			return err
+		}
+	}
+	if !subnet {
+		// Creating default subnet boxe
+		var clusterName string
+		if !vpc {
+			clusterName = "cluster_aws_vpc_default"
+		} else {
+			clusterName = "G"
+		}
+		err := graph.AddSubGraph(clusterName, "cluster_aws_subnet_default", map[string]string{
+			"label": "Subnet: default",
+		})
+		if err != nil {
+			utils.PrintError(err)
+			return err
+		}
+
+		// Adding invisible node to VPC for links
+		err = graph.AddNode("cluster_aws_vpc_default", "aws_subnet_default", map[string]string{
+			"shape": "point",
+			"style": "invis",
+		})
+		if err != nil {
+			utils.PrintError(err)
+			return err
+		}
+	}
+	return nil
+}
+
 // This function creates Graphviz nodes from the TF file 
 func (a *AwsTemp) CreateGraphNodes(file *tfconfigs.Module, ctx *hcl2.EvalContext, graph *gographviz.Escape) (error) {
 	// Setting CIDR for public network (Internet)
@@ -188,8 +247,14 @@ func (a *AwsTemp) CreateGraphNodes(file *tfconfigs.Module, ctx *hcl2.EvalContext
 			diags := gohcl.DecodeBody(v.Config, ctx, &awsInstance)
 			utils.PrintDiags(diags)
 
-			// Creating Instance nodes			
-			err := graph.AddNode("cluster_"+strings.Replace(*awsInstance.SubnetID, ".", "_", -1), v.Type+"_"+v.Name, map[string]string{
+			// Creating Instance nodes
+			var clusterId string
+			if awsInstance.SubnetID == nil {
+				clusterId = "aws_subnet_default"
+			} else {
+				clusterId = strings.Replace(*awsInstance.SubnetID, ".", "_", -1)
+			}
+			err := graph.AddNode("cluster_"+clusterId, v.Type+"_"+v.Name, map[string]string{
 				"style": "filled",
 			})
 			if err != nil {

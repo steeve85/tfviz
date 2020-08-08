@@ -58,6 +58,7 @@ func main() {
 		Cidr:				make(map[string]string),
 	}
 	
+	tfAws.DefaultVpcSubnet(tfModule, graph)
 	tfAws.CreateGraphNodes(tfModule, ctx, graph)
 	tfAws.PrepareSecurityGroups(tfModule, ctx)
 	tfAws.CreateGraphEdges(tfModule, ctx, graph)
