@@ -5,7 +5,6 @@ import (
 	"math/rand"
 	"testing"
 
-	//"github.com/awalterschulze/gographviz"
 	"github.com/steeve85/tfviz/aws"
 	"github.com/steeve85/tfviz/utils"
 )
@@ -44,17 +43,20 @@ func TestVpcSubnetEc2(t *testing.T) {
 		t.Errorf("Incorrect number of nodes")
 	}
 
-	// TODO 
 	tfAws := &aws.AwsTemp{
 		AwsSecurityGroups:	make(map[string][]string),
 		Cidr:				make(map[string]string),
 	}
-	
+
+	if len(tfModule.ManagedResources) != 9 {
+		t.Errorf("Incorrect number of TF resources")
+	}
+
 	tfAws.CreateGraphNodes(tfModule, ctx, graph)
-	tfAws.PrepareSecurityGroups(tfModule, ctx)
-	tfAws.CreateGraphEdges(tfModule, ctx, graph)
-	
-	
+	if len(graph.Nodes.Nodes) != 10 {
+		t.Errorf("CreateGraphNodes: Incorrect number of nodes")
+	}
+
 	// Checking graph export
 	outputPath := fmt.Sprintf("/tmp/tfviz_testing_%d", rand.Intn(100000))
 	err = utils.ExportGraphToFile(outputPath, "png", graph)
