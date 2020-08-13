@@ -39,7 +39,6 @@ func ExportGraphToFile(outputPath string, outputFormat string, graph *gographviz
 	if outputFormat == "dot" {
 		err := ioutil.WriteFile(outputPath, []byte(graph.String()), 0644)
 		if err != nil {
-			fmt.Println(err.Error())
 			return err
 		}
 	} else {
@@ -48,7 +47,6 @@ func ExportGraphToFile(outputPath string, outputFormat string, graph *gographviz
 		cmd.Stdin = strings.NewReader(graph.String())
 		err := cmd.Run()
 		if err != nil {
-			fmt.Println(err.Error())
 			return err
 		}
 	}
@@ -58,7 +56,6 @@ func ExportGraphToFile(outputPath string, outputFormat string, graph *gographviz
 func ParseTFfile(configpath string) (*tfconfigs.Module, error) {
 	f, err := os.Stat(configpath);
 	if err != nil {
-		PrintError(err)
 		return nil, err
 	}
 
@@ -69,7 +66,6 @@ func ParseTFfile(configpath string) (*tfconfigs.Module, error) {
 		fmt.Println("Parsing", configpath, "Terraform module...")
 		if tfparser.IsConfigDir(configpath) == false {
 			err := fmt.Errorf("[ERROR] Directory %s does not contain valid Terraform configuration files", configpath)
-			fmt.Println(err.Error())
 			return nil, err
 		}
 		module, diags := tfparser.LoadConfigDir(configpath)
@@ -81,7 +77,6 @@ func ParseTFfile(configpath string) (*tfconfigs.Module, error) {
 		// Return error if the TF file doesn't contain resources
 		if len(file.ManagedResources) == 0 {
 			err := fmt.Errorf("[ERROR] File %s does not contain valid Terraform configuration", configpath)
-			fmt.Println(err.Error())
 			return nil, err
 		}
 		module, moreDiags := tfconfigs.NewModule([]*tfconfigs.File{file}, nil)
@@ -97,13 +92,10 @@ func InitiateGraph() (*gographviz.Escape, error) {
 	g.SetName("G")
 	g.SetDir(false)
 
+	var err error
 	// Adding node for Internet representation
-	err := g.AddNode("G", "Internet", map[string]string{
+	err = g.AddNode("G", "Internet", map[string]string{
 		"shape": "octagon",
 	})
-	if err != nil {
-		PrintError(err)
-		return nil, err
-	}
-	return g, nil
+	return g, err
 }

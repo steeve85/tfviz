@@ -45,11 +45,13 @@ func main() {
 	tfModule, err := utils.ParseTFfile(*inputFlag)
 	if err != nil {
 		// invalid input directory/file
+		utils.PrintError(err)
 		os.Exit(1)
 	}
 	ctx := aws.InitiateVariablesAndResources(tfModule)
 	graph, err := utils.InitiateGraph()
 	if err != nil {
+		utils.PrintError(err)
 		os.Exit(1)
 	}
 
@@ -63,5 +65,8 @@ func main() {
 	tfAws.PrepareSecurityGroups(tfModule, ctx)
 	tfAws.CreateGraphEdges(tfModule, ctx, graph)
 	
-	utils.ExportGraphToFile(*outputFlag, *formatFlag, graph)
+	err = utils.ExportGraphToFile(*outputFlag, *formatFlag, graph)
+	if err != nil {
+		utils.PrintError(err)
+	}
 }

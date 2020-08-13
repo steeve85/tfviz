@@ -110,6 +110,24 @@ func TestParseTFfile(t *testing.T) {
 	if len(tfModule.ManagedResources) != 9 {
 		t.Errorf("Incorrect number of ManagedResources")
 	}
+
+	// Testing a non TF file
+	_, err = ParseTFfile("utils.go")
+	if err == nil {
+		t.Errorf("ParseTFfile(utils.go) should fail")
+	}
+
+	// Testing a non TF module
+	_, err = ParseTFfile(".")
+	if err == nil {
+		t.Errorf("ParseTFfile('.') should fail")
+	}
+
+	// Testing a non TF module
+	_, err = ParseTFfile("qwertyuiop")
+	if err == nil {
+		t.Errorf("ParseTFfile('qwertyuiop') should fail")
+	}
 }
 
 
@@ -126,10 +144,25 @@ func TestExportGraphToFile(t *testing.T) {
 		t.Errorf(err.Error())
 	}
 
+	// Exporting in DOT format to an non existent directory
+	outputPath = fmt.Sprintf("./qwertyuiop/tfviz_TestExportGraphToFile_%d.dot", rand.Intn(100000))
+	err = ExportGraphToFile(outputPath, "dot", graph)
+	if err == nil {
+		t.Errorf("ExportGraphToFile() to %s should fail", outputPath)
+	}
+
+	// Exporting in PNG format
 	outputPath = fmt.Sprintf("/tmp/tfviz_TestExportGraphToFile_%d.png", rand.Intn(100000))
 	err = ExportGraphToFile(outputPath, "png", graph)
 	if err != nil {
 		t.Errorf(err.Error())
+	}
+
+	// Exporting in PNG format to an non existent directory
+	outputPath = fmt.Sprintf("./qwertyuiop/tfviz_TestExportGraphToFile_%d.png", rand.Intn(100000))
+	err = ExportGraphToFile(outputPath, "png", graph)
+	if err == nil {
+		t.Errorf("ExportGraphToFile() to %s should fail", outputPath)
 	}
 }
 
