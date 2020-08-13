@@ -16,7 +16,8 @@ var Ignorewarnings bool
 
 func PrintError(err error) {
 	e := fmt.Errorf("[ERROR] %s", err)
-	fmt.Println(e.Error())
+	//fmt.Println(e.Error())
+	fmt.Println(e)
 }
 
 func PrintDiags(diags hcl2.Diagnostics) {
