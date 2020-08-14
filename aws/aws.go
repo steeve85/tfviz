@@ -91,7 +91,12 @@ func InitiateVariablesAndResources(file *tfconfigs.Module) (*hcl2.EvalContext) {
 
 	// Prepare context with TF variables
 	for _, v := range file.Variables {
-		ctxVariables[v.Name] = v.Default
+		// Handling the case there is no default value for the variable
+		if v.Default.IsNull() {
+			ctxVariables[v.Name] = cty.StringVal("var_" + v.Name)
+		} else {
+			ctxVariables[v.Name] = v.Default
+		}
 	}
 
 	// Prepare context with named values to resources
@@ -305,7 +310,6 @@ func (a *AwsTemp) CreateGraphEdges(file *tfconfigs.Module, ctx *hcl2.EvalContext
 				for _, cidr := range a.AwsSecurityGroups[sg] {
 					err := graph.AddEdge(a.Cidr[cidr], v.Type+"_"+v.Name, false, nil)
 					if err != nil {
-						utils.PrintError(err)
 						return err
 					}
 				}	
