@@ -144,7 +144,6 @@ func (a *AwsTemp) DefaultVpcSubnet(file *tfconfigs.Module, graph *gographviz.Esc
 			"label": "VPC: default",
 		})
 		if err != nil {
-			utils.PrintError(err)
 			return err
 		}
 		// Adding invisible node to VPC for links
@@ -153,7 +152,6 @@ func (a *AwsTemp) DefaultVpcSubnet(file *tfconfigs.Module, graph *gographviz.Esc
 			"style": "invis",
 		})
 		if err != nil {
-			utils.PrintError(err)
 			return err
 		}
 	}
@@ -169,7 +167,6 @@ func (a *AwsTemp) DefaultVpcSubnet(file *tfconfigs.Module, graph *gographviz.Esc
 			"label": "Subnet: default",
 		})
 		if err != nil {
-			utils.PrintError(err)
 			return err
 		}
 
@@ -179,7 +176,6 @@ func (a *AwsTemp) DefaultVpcSubnet(file *tfconfigs.Module, graph *gographviz.Esc
 			"style": "invis",
 		})
 		if err != nil {
-			utils.PrintError(err)
 			return err
 		}
 	}
@@ -204,7 +200,6 @@ func (a *AwsTemp) CreateGraphNodes(file *tfconfigs.Module, ctx *hcl2.EvalContext
 				"label": "VPC: "+v.Name,
 			})
 			if err != nil {
-				utils.PrintError(err)
 				return err
 			}
 
@@ -214,7 +209,6 @@ func (a *AwsTemp) CreateGraphNodes(file *tfconfigs.Module, ctx *hcl2.EvalContext
 				"style": "invis",
 			})
 			if err != nil {
-				utils.PrintError(err)
 				return err
 			}
 		} else if v.Type == "aws_subnet" {
@@ -229,7 +223,6 @@ func (a *AwsTemp) CreateGraphNodes(file *tfconfigs.Module, ctx *hcl2.EvalContext
 				"label": "Subnet: "+v.Name,
 			})
 			if err != nil {
-				utils.PrintError(err)
 				return err
 			}
 			
@@ -239,7 +232,6 @@ func (a *AwsTemp) CreateGraphNodes(file *tfconfigs.Module, ctx *hcl2.EvalContext
 				"style": "invis",
 			})
 			if err != nil {
-				utils.PrintError(err)
 				return err
 			}
 		} else if v.Type == "aws_instance" {
@@ -258,7 +250,6 @@ func (a *AwsTemp) CreateGraphNodes(file *tfconfigs.Module, ctx *hcl2.EvalContext
 				"style": "filled",
 			})
 			if err != nil {
-				utils.PrintError(err)
 				return err
 			}
 		}

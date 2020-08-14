@@ -60,10 +60,19 @@ func main() {
 		Cidr:				make(map[string]string),
 	}
 	
-	tfAws.DefaultVpcSubnet(tfModule, graph)
-	tfAws.CreateGraphNodes(tfModule, ctx, graph)
+	err = tfAws.DefaultVpcSubnet(tfModule, graph)
+	if err != nil {
+		utils.PrintError(err)
+	}
+	err = tfAws.CreateGraphNodes(tfModule, ctx, graph)
+	if err != nil {
+		utils.PrintError(err)
+	}
 	tfAws.PrepareSecurityGroups(tfModule, ctx)
-	tfAws.CreateGraphEdges(tfModule, ctx, graph)
+	err = tfAws.CreateGraphEdges(tfModule, ctx, graph)
+	if err != nil {
+		utils.PrintError(err)
+	}
 	
 	err = utils.ExportGraphToFile(*outputFlag, *formatFlag, graph)
 	if err != nil {

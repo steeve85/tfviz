@@ -52,8 +52,14 @@ func TestAwsEc2Instance(t *testing.T) {
 		t.Errorf("Incorrect number of TF resources")
 	}
 
-	tfAws.DefaultVpcSubnet(tfModule, graph)
-	tfAws.CreateGraphNodes(tfModule, ctx, graph)
+	err = tfAws.DefaultVpcSubnet(tfModule, graph)
+	if err != nil {
+		t.Errorf(err.Error())
+	}
+	err = tfAws.CreateGraphNodes(tfModule, ctx, graph)
+	if err != nil {
+		t.Errorf(err.Error())
+	}
 	
 	if len(graph.Nodes.Nodes) != 4 {
 		t.Errorf("CreateGraphNodes: Incorrect number of nodes")
@@ -110,7 +116,10 @@ func TestVpcSubnetEc2(t *testing.T) {
 		t.Errorf("Incorrect number of TF resources")
 	}
 
-	tfAws.CreateGraphNodes(tfModule, ctx, graph)
+	err = tfAws.CreateGraphNodes(tfModule, ctx, graph)
+	if err != nil {
+		t.Errorf(err.Error())
+	}
 	if len(graph.Nodes.Nodes) != 10 {
 		t.Errorf("CreateGraphNodes: Incorrect number of nodes")
 	}
