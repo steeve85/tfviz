@@ -15,7 +15,8 @@ import (
 )
 
 type AwsTemp struct {
-	Ingress			 	map[string][]string
+	SecurityGroups		map[string][]string
+	Ingress				map[string][]string
 	Egress 				map[string][]string
 	CidrVpc				map[string]string
 	CidrSubnet			map[string]string
@@ -277,6 +278,11 @@ func (a *AwsTemp) PrepareSecurityGroups(file *tfconfigs.Module, ctx *hcl2.EvalCo
 			diags := gohcl.DecodeBody(v.Config, ctx, &awsSecurityGroup)
 			utils.PrintDiags(diags)
 
+			// SecurityGroups map to link instances with Security Groups
+			//instances := make(map[string][]string)
+			instances := []string{}
+			a.SecurityGroups["aws_security_group." + v.Name] = instances
+
 			// Ingress
 			var SGsIngress []string
 			for _, ingress := range awsSecurityGroup.Ingress {
@@ -289,8 +295,11 @@ func (a *AwsTemp) PrepareSecurityGroups(file *tfconfigs.Module, ctx *hcl2.EvalCo
 				if ingress.SecurityGroups != nil {
 					SGsIngress = append(SGsIngress, *ingress.SecurityGroups...)
 				}
+				if ingress.Self != nil && *ingress.Self == true {
+					SGsIngress = append(SGsIngress, "aws_security_group." + v.Name)
+				}
 			}
-			a.Ingress["aws_security_group." + v.Name] = SGsIngress
+			a.Ingress["aws_security_group." + v.Name] = utils.RemoveDuplicateValues(SGsIngress)
 
 			// Egress
 			var SGsEgress []string
@@ -304,14 +313,41 @@ func (a *AwsTemp) PrepareSecurityGroups(file *tfconfigs.Module, ctx *hcl2.EvalCo
 				if egress.SecurityGroups != nil {
 					SGsEgress = append(SGsEgress, *egress.SecurityGroups...)
 				}
+				if egress.Self != nil && *egress.Self == true {
+					SGsEgress = append(SGsEgress, "aws_security_group." + v.Name)
+				}
 			}
-			a.Egress["aws_security_group." + v.Name] = SGsEgress
+			a.Egress["aws_security_group." + v.Name] = utils.RemoveDuplicateValues(SGsEgress)
 		}
 	}
 }
 
 func (a *AwsTemp) CreateGraphEdges(file *tfconfigs.Module, ctx *hcl2.EvalContext, graph *gographviz.Escape) (error) {
-	// HCL parsing with extrapolated variables
+	// Link Instances with their Security Groups
+	// FIXME/TODO this is a duplicate of some code below. Need refactor
+	defaultSG := false
+	for _, v := range file.ManagedResources {
+		if v.Type == "aws_instance" {
+			var awsInstance AwsInstance
+			diags := gohcl.DecodeBody(v.Config, ctx, &awsInstance)
+			utils.PrintDiags(diags)
+
+			// Get Security Groups of the AWS instance
+			var SGs []string
+			if awsInstance.SecurityGroups != nil {
+				SGs = append(SGs, *awsInstance.SecurityGroups...)
+			}
+			if awsInstance.VpcSecurityGroupIDs != nil {
+				SGs = append(SGs, *awsInstance.VpcSecurityGroupIDs...)
+			}
+
+			for _, sg := range SGs {
+				a.SecurityGroups[sg] = append(a.SecurityGroups[sg], v.Type+"."+v.Name)
+			}
+		}
+	}
+	// Create edges based on Security Groups
+	// FIXME/TODO this is a duplicate of some code above. Need refactor
 	for _, v := range file.ManagedResources {
 		
 		if v.Type == "aws_instance" {
@@ -328,15 +364,28 @@ func (a *AwsTemp) CreateGraphEdges(file *tfconfigs.Module, ctx *hcl2.EvalContext
 				SGs = append(SGs, *awsInstance.VpcSecurityGroupIDs...)
 			}
 
-			fmt.Println("SGs", SGs)
+			if len(SGs) == 0 {
+				// This instance has no SG attached and so will inherit from the default SG
+				if !defaultSG {
+					// Create the default SG node
+					err := graph.AddNode("G", "sg-default", map[string]string{
+						"style": "dotted",
+						"label": "sg-default",
+					})
+					if err != nil {
+						return err
+					}
+				}
+				err := graph.AddEdge("sg-default", v.Type+"_"+v.Name, true, nil)
+				if err != nil {
+					return err
+				}
+			}
+			// The instance has at least a SG atteched to it
 			for _, sg := range SGs {
-				fmt.Println("a.Ingress[sg]", a.Ingress[sg])
 
 				for _, source := range a.Ingress[sg] {
-					//attrs := map[string]string{}
-					fmt.Println("source", source)
 					// Highlight Ingress from 0.0.0.0/0 in red
-					//fmt.Println("graph", graph.String())
 					if source == "0.0.0.0/0" {
 						err := graph.AddEdge("Internet", v.Type+"_"+v.Name, true, map[string]string{
 							"color": "red",
@@ -345,64 +394,76 @@ func (a *AwsTemp) CreateGraphEdges(file *tfconfigs.Module, ctx *hcl2.EvalContext
 							return err
 						}
 					} else {
-						ipAddrSG, ipNetSG, err := net.ParseCIDR(source)
+						ipAddrSG, _, err := net.ParseCIDR(source)
 						if err != nil {
 							// This is not a valid CIDR, so it is probably a Security Group name
-							// TODO
-							fmt.Println(err)
+							if len(a.SecurityGroups[source]) != 0 {
+								// If the SG is found in the TF module, create edges between the nodes that have this SG attached to them
+								for _, instanceSrc := range(a.SecurityGroups[source]) {
+									instanceSrc = strings.Replace(instanceSrc, ".", "_", -1)
+									if instanceSrc != v.Type+"_"+v.Name {
+										err = graph.AddEdge(instanceSrc, v.Type+"_"+v.Name, true, nil)
+										if err != nil {
+											return err
+										}
+									}
+								}
+							} else if strings.HasPrefix(source, "sg-") {
+								// If the SG is not found in the TF module, it's probably a SG defined outside of TF
+								_, found := a.SecurityGroups[source]
+								if !found {
+									// If the SG is not in a.SecurityGroups, we need to create the Node before the Edges
+									err := graph.AddNode("G", source, map[string]string{
+										"style": "dotted",
+										"label": source,
+									})
+									if err != nil {
+										return err
+									}
+								}
+								// The SG exists, we just need to link it with the appropriate intances
+								err = graph.AddEdge(source, v.Type+"_"+v.Name, true, nil)
+								if err != nil {
+									return err
+								}
+							} else {
+								// Unrecognized SG name
+								fmt.Println(err)
+							}
 						} else {
 							// The source is a valid CIDR
-							fmt.Println(ipAddrSG)
-							fmt.Println(ipNetSG)
-							fmt.Println("a.CidrVpc", a.CidrVpc)
-							fmt.Println("a.CidrSubnet", a.CidrSubnet)
-
 							edgeCreated := false
-							for cidr, subnetName := range a.CidrSubnet {
+							for cidr, _ := range a.CidrSubnet {
 								// Checking for Security Group source IP / Subnet matching
-								fmt.Println(cidr, subnetName)
 								_, ipNetSubnet, err := net.ParseCIDR(cidr)
 								if ipNetSubnet.Contains(ipAddrSG) {
-									fmt.Println(ipAddrSG, "in", ipNetSubnet)
-									fmt.Println("Subnet: source", source)
-									fmt.Println("a.CidrSubnet[ipNetSubnet]", a.CidrSubnet[ipNetSubnet.String()])
+									// the source IP is part of this subnet CIDR
 									err = graph.AddEdge(a.CidrSubnet[ipNetSubnet.String()], v.Type+"_"+v.Name, true, nil)
 									if err != nil {
 										return err
 									}
-									// the source IP is part of this subnet CIDR
 									edgeCreated = true
-								} else {
-									fmt.Println(ipAddrSG, "not in", ipNetSubnet)
 								}
 							}
 							if !edgeCreated {
 								// Security Group source IP did not matched with Subnet CIDRs
 								// Now checking with VPC CIDRs
-								for cidr, VpcName := range a.CidrVpc {
-									fmt.Println(cidr, VpcName)
+								for cidr, _ := range a.CidrVpc {
 									_, ipNetVpc, err := net.ParseCIDR(cidr)
 									if ipNetVpc.Contains(ipAddrSG) {
-										fmt.Println(ipAddrSG, "in", ipNetVpc)
-										fmt.Println("VPC: source", source)
-										fmt.Println("a.CidrVpc[ipNetVpc]", a.CidrVpc[ipNetVpc.String()])
+										// the source IP is part of this VPC CIDR
 										err = graph.AddEdge(a.CidrVpc[ipNetVpc.String()], v.Type+"_"+v.Name, true, nil)
 										if err != nil {
 											return err
 										}
-										// the source IP is part of this VPC CIDR
 										edgeCreated = true
-									} else {
-										fmt.Println(ipAddrSG, "not in", ipNetVpc)
 									}
 								}
 							}
 							if !edgeCreated {
 								// Security Group source IP did not matched with Subnet and VPC CIDRs
 								// Creating a node for the source as it likely to be an undefined IP/CIDR
-								err := graph.AddNode("G", source, map[string]string{
-									"style": "filled",
-								})
+								err := graph.AddNode("G", source, nil)
 								if err != nil {
 									return err
 								}
@@ -411,8 +472,6 @@ func (a *AwsTemp) CreateGraphEdges(file *tfconfigs.Module, ctx *hcl2.EvalContext
 									return err
 								}
 							}
-							// => check CidrSubnet first, and then with VPC and then default with creating a specific node (outside of known/defined networks/CIDR)
-							
 						}
 					}
 				}
