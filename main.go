@@ -56,8 +56,10 @@ func main() {
 	}
 
 	tfAws := &aws.AwsTemp{
-		AwsSecurityGroups:	make(map[string][]string),
-		Cidr:				make(map[string]string),
+		Ingress:			make(map[string][]string),
+		Egress:				make(map[string][]string),
+		CidrVpc:			make(map[string]string),
+		CidrSubnet:			make(map[string]string),
 	}
 	
 	err = tfAws.DefaultVpcSubnet(tfModule, graph)
@@ -69,6 +71,13 @@ func main() {
 		utils.PrintError(err)
 	}
 	tfAws.PrepareSecurityGroups(tfModule, ctx)
+
+	// DEBUG
+	fmt.Println("tfAws.Ingress", tfAws.Ingress)
+	fmt.Println("tfAws.Egress", tfAws.Egress)
+	fmt.Println("tfAws.CidrVpc", tfAws.CidrVpc)
+	fmt.Println("tfAws.CidrSubnet", tfAws.CidrSubnet)
+
 	err = tfAws.CreateGraphEdges(tfModule, ctx, graph)
 	if err != nil {
 		utils.PrintError(err)

@@ -1,6 +1,8 @@
 package aws
 
 import (
+	"fmt"
+	"net"
 	"strings"
 
 	tfconfigs "github.com/hashicorp/terraform/configs"
@@ -13,8 +15,10 @@ import (
 )
 
 type AwsTemp struct {
-	AwsSecurityGroups 	map[string][]string
-	Cidr				map[string]string
+	Ingress			 	map[string][]string
+	Egress 				map[string][]string
+	CidrVpc				map[string]string
+	CidrSubnet			map[string]string
 }
 
 // AwsVpc is a structure for AWS VPC resources
@@ -56,18 +60,20 @@ type AwsSecurityGroup struct {
 	// The VPC ID
 	VpcID					*string `hcl:"vpc_id"`
 	// A list of ingress rules
-	Ingress					[]AwsIngress `hcl:"ingress,block"` // FIXME make it optional?
+	Ingress					[]AwsSGRule `hcl:"ingress,block"` // FIXME make it optional?
+	// A list of egress rules
+	Egress					[]AwsSGRule `hcl:"egress,block"` // FIXME make it optional?
 	// Other arguments
 	Remain     				hcl2.Body `hcl:",remain"`
 }
 
-// AwsIngress is a structure for AWS Security Group ingress blocks
-type AwsIngress struct {
+// AwsSGRule is a structure for AWS Security Group ingress/egress blocks
+type AwsSGRule struct {
 	// The start port (or ICMP type number if protocol is "icmp" or "icmpv6")
 	FromPort				int `hcl:"from_port"`
 	// The end range port (or ICMP code if protocol is "icmp")
 	ToPort					int `hcl:"to_port"`
-	// If true, the security group itself will be added as a source to this ingress rule
+	// If true, the security group itself will be added as a source to this ingress/egress rule
 	Self					*bool `hcl:"self"`
 	// The protocol.  icmp, icmpv6, tcp, udp, "-1" (all)
 	Protocol				string `hcl:"protocol"`
@@ -190,7 +196,7 @@ func (a *AwsTemp) DefaultVpcSubnet(file *tfconfigs.Module, graph *gographviz.Esc
 // This function creates Graphviz nodes from the TF file 
 func (a *AwsTemp) CreateGraphNodes(file *tfconfigs.Module, ctx *hcl2.EvalContext, graph *gographviz.Escape) (error) {
 	// Setting CIDR for public network (Internet)
-	a.Cidr["0.0.0.0/0"] = "Internet"
+	//a.Cidr["0.0.0.0/0"] = "Internet"
 	// HCL parsing with extrapolated variables
 	for _, v := range file.ManagedResources {
 		if v.Type == "aws_vpc" {
@@ -198,7 +204,7 @@ func (a *AwsTemp) CreateGraphNodes(file *tfconfigs.Module, ctx *hcl2.EvalContext
 			diags := gohcl.DecodeBody(v.Config, ctx, &awsVpc)
 			utils.PrintDiags(diags)
 
-			a.Cidr[awsVpc.CidrBlock] = v.Type+"_"+v.Name
+			a.CidrVpc[awsVpc.CidrBlock] = v.Type+"_"+v.Name
 
 			// Creating VPC boxes
 			err := graph.AddSubGraph("G", "cluster_"+v.Type+"_"+v.Name, map[string]string{
@@ -221,7 +227,7 @@ func (a *AwsTemp) CreateGraphNodes(file *tfconfigs.Module, ctx *hcl2.EvalContext
 			diags := gohcl.DecodeBody(v.Config, ctx, &awsSubnet)
 			utils.PrintDiags(diags)
 
-			a.Cidr[awsSubnet.CidrBlock] = v.Type+"_"+v.Name
+			a.CidrSubnet[awsSubnet.CidrBlock] = v.Type+"_"+v.Name
 
 			// Creating subnet boxes
 			err := graph.AddSubGraph("cluster_"+strings.Replace(awsSubnet.VpcID, ".", "_", -1), "cluster_"+v.Type+"_"+v.Name, map[string]string{
@@ -271,19 +277,35 @@ func (a *AwsTemp) PrepareSecurityGroups(file *tfconfigs.Module, ctx *hcl2.EvalCo
 			diags := gohcl.DecodeBody(v.Config, ctx, &awsSecurityGroup)
 			utils.PrintDiags(diags)
 
-			var SGs []string
+			// Ingress
+			var SGsIngress []string
 			for _, ingress := range awsSecurityGroup.Ingress {
 				if ingress.CidrBlocks != nil {
-					SGs = append(SGs, *ingress.CidrBlocks...)
+					SGsIngress = append(SGsIngress, *ingress.CidrBlocks...)
 				}
 				if ingress.IPv6CidrBlocks != nil {
-					SGs = append(SGs, *ingress.IPv6CidrBlocks...)
+					SGsIngress = append(SGsIngress, *ingress.IPv6CidrBlocks...)
 				}
 				if ingress.SecurityGroups != nil {
-					SGs = append(SGs, *ingress.SecurityGroups...)
+					SGsIngress = append(SGsIngress, *ingress.SecurityGroups...)
 				}
 			}
-			a.AwsSecurityGroups["aws_security_group." + v.Name] = SGs
+			a.Ingress["aws_security_group." + v.Name] = SGsIngress
+
+			// Egress
+			var SGsEgress []string
+			for _, egress := range awsSecurityGroup.Egress {
+				if egress.CidrBlocks != nil {
+					SGsEgress = append(SGsEgress, *egress.CidrBlocks...)
+				}
+				if egress.IPv6CidrBlocks != nil {
+					SGsEgress = append(SGsEgress, *egress.IPv6CidrBlocks...)
+				}
+				if egress.SecurityGroups != nil {
+					SGsEgress = append(SGsEgress, *egress.SecurityGroups...)
+				}
+			}
+			a.Egress["aws_security_group." + v.Name] = SGsEgress
 		}
 	}
 }
@@ -306,13 +328,104 @@ func (a *AwsTemp) CreateGraphEdges(file *tfconfigs.Module, ctx *hcl2.EvalContext
 				SGs = append(SGs, *awsInstance.VpcSecurityGroupIDs...)
 			}
 
+			fmt.Println("SGs", SGs)
 			for _, sg := range SGs {
-				for _, cidr := range a.AwsSecurityGroups[sg] {
-					err := graph.AddEdge(a.Cidr[cidr], v.Type+"_"+v.Name, false, nil)
+				fmt.Println("a.Ingress[sg]", a.Ingress[sg])
+
+				for _, source := range a.Ingress[sg] {
+					//attrs := map[string]string{}
+					fmt.Println("source", source)
+					// Highlight Ingress from 0.0.0.0/0 in red
+					//fmt.Println("graph", graph.String())
+					if source == "0.0.0.0/0" {
+						err := graph.AddEdge("Internet", v.Type+"_"+v.Name, true, map[string]string{
+							"color": "red",
+						})
+						if err != nil {
+							return err
+						}
+					} else {
+						ipAddrSG, ipNetSG, err := net.ParseCIDR(source)
+						if err != nil {
+							// This is not a valid CIDR, so it is probably a Security Group name
+							// TODO
+							fmt.Println(err)
+						} else {
+							// The source is a valid CIDR
+							fmt.Println(ipAddrSG)
+							fmt.Println(ipNetSG)
+							fmt.Println("a.CidrVpc", a.CidrVpc)
+							fmt.Println("a.CidrSubnet", a.CidrSubnet)
+
+							edgeCreated := false
+							for cidr, subnetName := range a.CidrSubnet {
+								// Checking for Security Group source IP / Subnet matching
+								fmt.Println(cidr, subnetName)
+								_, ipNetSubnet, err := net.ParseCIDR(cidr)
+								if ipNetSubnet.Contains(ipAddrSG) {
+									fmt.Println(ipAddrSG, "in", ipNetSubnet)
+									fmt.Println("Subnet: source", source)
+									fmt.Println("a.CidrSubnet[ipNetSubnet]", a.CidrSubnet[ipNetSubnet.String()])
+									err = graph.AddEdge(a.CidrSubnet[ipNetSubnet.String()], v.Type+"_"+v.Name, true, nil)
+									if err != nil {
+										return err
+									}
+									// the source IP is part of this subnet CIDR
+									edgeCreated = true
+								} else {
+									fmt.Println(ipAddrSG, "not in", ipNetSubnet)
+								}
+							}
+							if !edgeCreated {
+								// Security Group source IP did not matched with Subnet CIDRs
+								// Now checking with VPC CIDRs
+								for cidr, VpcName := range a.CidrVpc {
+									fmt.Println(cidr, VpcName)
+									_, ipNetVpc, err := net.ParseCIDR(cidr)
+									if ipNetVpc.Contains(ipAddrSG) {
+										fmt.Println(ipAddrSG, "in", ipNetVpc)
+										fmt.Println("VPC: source", source)
+										fmt.Println("a.CidrVpc[ipNetVpc]", a.CidrVpc[ipNetVpc.String()])
+										err = graph.AddEdge(a.CidrVpc[ipNetVpc.String()], v.Type+"_"+v.Name, true, nil)
+										if err != nil {
+											return err
+										}
+										// the source IP is part of this VPC CIDR
+										edgeCreated = true
+									} else {
+										fmt.Println(ipAddrSG, "not in", ipNetVpc)
+									}
+								}
+							}
+							if !edgeCreated {
+								// Security Group source IP did not matched with Subnet and VPC CIDRs
+								// Creating a node for the source as it likely to be an undefined IP/CIDR
+								err := graph.AddNode("G", source, map[string]string{
+									"style": "filled",
+								})
+								if err != nil {
+									return err
+								}
+								err = graph.AddEdge(source, v.Type+"_"+v.Name, true, nil)
+								if err != nil {
+									return err
+								}
+							}
+							// => check CidrSubnet first, and then with VPC and then default with creating a specific node (outside of known/defined networks/CIDR)
+							
+						}
+					}
+				}
+				/*
+				for _, source := range a.Egress[sg] {
+					err := graph.AddEdge(v.Type+"_"+v.Name, a.Cidr[source], true, map[string]string{
+						"style": "dashed",
+					})
 					if err != nil {
 						return err
 					}
-				}	
+				}
+				*/
 			}
 		}
 	}

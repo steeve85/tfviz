@@ -90,7 +90,7 @@ func InitiateGraph() (*gographviz.Escape, error) {
 	// Graph initialization
 	g := gographviz.NewEscape()
 	g.SetName("G")
-	g.SetDir(false)
+	g.SetDir(true)
 
 	var err error
 	// Adding node for Internet representation
