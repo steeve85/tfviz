@@ -45,7 +45,8 @@ func TestDefaultVpcSubnet(t *testing.T) {
 	graph.SetDir(false)
 
 	tfAws := &AwsTemp{
-		AwsSecurityGroups:	make(map[string][]string),
+		Ingress:			make(map[string][]string),
+		Egress:				make(map[string][]string),
 		Cidr:				make(map[string]string),
 	}
 
@@ -72,7 +73,8 @@ func TestCreateGraphNodes(t *testing.T) {
 	graph.SetDir(false)
 
 	tfAws := &AwsTemp{
-		AwsSecurityGroups:	make(map[string][]string),
+		Ingress:			make(map[string][]string),
+		Egress:				make(map[string][]string),
 		Cidr:				make(map[string]string),
 	}
 

@@ -44,7 +44,8 @@ func TestAwsEc2Instance(t *testing.T) {
 	}
 
 	tfAws := &aws.AwsTemp{
-		AwsSecurityGroups:	make(map[string][]string),
+		Ingress:			make(map[string][]string),
+		Egress:				make(map[string][]string),
 		Cidr:				make(map[string]string),
 	}
 
@@ -108,7 +109,8 @@ func TestVpcSubnetEc2(t *testing.T) {
 	}
 
 	tfAws := &aws.AwsTemp{
-		AwsSecurityGroups:	make(map[string][]string),
+		Ingress:			make(map[string][]string),
+		Egress:				make(map[string][]string),
 		Cidr:				make(map[string]string),
 	}
 

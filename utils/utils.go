@@ -90,7 +90,7 @@ func InitiateGraph() (*gographviz.Escape, error) {
 	// Graph initialization
 	g := gographviz.NewEscape()
 	g.SetName("G")
-	g.SetDir(false)
+	g.SetDir(true)
 
 	var err error
 	// Adding node for Internet representation
@@ -99,3 +99,21 @@ func InitiateGraph() (*gographviz.Escape, error) {
 	})
 	return g, err
 }
+
+// RemoveDuplicateValues removes duplicate strings in []string slices
+// Ref: https://www.geeksforgeeks.org/how-to-remove-duplicate-values-from-slice-in-golang/
+func RemoveDuplicateValues(strSlice []string) []string { 
+    keys := make(map[string]bool) 
+    list := []string{} 
+  
+    // If the key(values of the slice) is not equal 
+    // to the already present value in new slice (list) 
+    // then we append it. else we jump on another element. 
+    for _, entry := range strSlice { 
+        if _, value := keys[entry]; !value { 
+            keys[entry] = true
+            list = append(list, entry) 
+        } 
+    } 
+    return list 
+} 

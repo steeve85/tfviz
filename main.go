@@ -10,6 +10,7 @@ import (
 
 var exportFormats = []string{"dot", "jpeg", "pdf", "png"}
 
+// TODO/FIXME move this to utils package
 // Find takes a slice and looks for an element in it. If found it will
 // return it's key, otherwise it will return -1 and a bool of false.
 // https://golangcode.com/check-if-element-exists-in-slice/
@@ -56,8 +57,11 @@ func main() {
 	}
 
 	tfAws := &aws.AwsTemp{
-		AwsSecurityGroups:	make(map[string][]string),
-		Cidr:				make(map[string]string),
+		SecurityGroups:		make(map[string][]string),
+		Ingress:			make(map[string][]string),
+		Egress:				make(map[string][]string),
+		CidrVpc:			make(map[string]string),
+		CidrSubnet:			make(map[string]string),
 	}
 	
 	err = tfAws.DefaultVpcSubnet(tfModule, graph)
@@ -69,6 +73,7 @@ func main() {
 		utils.PrintError(err)
 	}
 	tfAws.PrepareSecurityGroups(tfModule, ctx)
+
 	err = tfAws.CreateGraphEdges(tfModule, ctx, graph)
 	if err != nil {
 		utils.PrintError(err)
