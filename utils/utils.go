@@ -91,11 +91,15 @@ func InitiateGraph() (*gographviz.Escape, error) {
 	g := gographviz.NewEscape()
 	g.SetName("G")
 	g.SetDir(true)
+	//g.AddAttr("G", "fontsize", "10")
 
 	var err error
 	// Adding node for Internet representation
 	err = g.AddNode("G", "Internet", map[string]string{
-		"shape": "octagon",
+		"shape": "none",
+		"label": "Internet",
+		"labelloc": "b",
+		"image": "./aws/icons/internet.png",
 	})
 	return g, err
 }
