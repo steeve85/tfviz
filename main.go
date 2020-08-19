@@ -10,19 +10,6 @@ import (
 
 var exportFormats = []string{"dot", "jpeg", "pdf", "png"}
 
-// TODO/FIXME move this to utils package
-// Find takes a slice and looks for an element in it. If found it will
-// return it's key, otherwise it will return -1 and a bool of false.
-// https://golangcode.com/check-if-element-exists-in-slice/
-func Find(slice []string, val string) (int, bool) {
-    for i, item := range slice {
-        if item == val {
-            return i, true
-        }
-    }
-    return -1, false
-}
-
 func main() {
 	inputFlag := flag.String("input", ".", "Path to Terraform file or directory ")
 	outputFlag := flag.String("output", "tfviz.bin", "Path to the exported file")
@@ -31,7 +18,7 @@ func main() {
 	flag.Parse()
 
 	// checking that export format is supported
-	_, found := Find(exportFormats, *formatFlag)
+	_, found := utils.Find(exportFormats, *formatFlag)
 	if !found {
 		fmt.Printf("[ERROR] File format %s is not supported. Quitting...\n", *formatFlag)
 		os.Exit(1)
