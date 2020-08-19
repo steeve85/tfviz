@@ -210,6 +210,9 @@ func (a *AwsTemp) CreateGraphNodes(file *tfconfigs.Module, ctx *hcl2.EvalContext
 			// Creating VPC boxes
 			err := graph.AddSubGraph("G", "cluster_"+v.Type+"_"+v.Name, map[string]string{
 				"label": "VPC: "+v.Name,
+				"style": "rounded",
+				"bgcolor": "#EDF1F2",
+				"labeljust": "l",
 			})
 			if err != nil {
 				return err
@@ -233,6 +236,9 @@ func (a *AwsTemp) CreateGraphNodes(file *tfconfigs.Module, ctx *hcl2.EvalContext
 			// Creating subnet boxes
 			err := graph.AddSubGraph("cluster_"+strings.Replace(awsSubnet.VpcID, ".", "_", -1), "cluster_"+v.Type+"_"+v.Name, map[string]string{
 				"label": "Subnet: "+v.Name,
+				"style": "rounded",
+				"bgcolor": "white",
+				"labeljust": "l",
 			})
 			if err != nil {
 				return err
@@ -259,7 +265,13 @@ func (a *AwsTemp) CreateGraphNodes(file *tfconfigs.Module, ctx *hcl2.EvalContext
 				clusterId = strings.Replace(*awsInstance.SubnetID, ".", "_", -1)
 			}
 			err := graph.AddNode("cluster_"+clusterId, v.Type+"_"+v.Name, map[string]string{
-				"style": "filled",
+				//"style": "filled",
+				"label": v.Name,
+				//"fontsize": "10",
+				"image": "./aws/icons/ec2.png",
+				//"imagescale": "true",
+				//"fixedsize": "true",
+				"shape": "none",
 			})
 			if err != nil {
 				return err
