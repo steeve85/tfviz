@@ -36,7 +36,8 @@ func main() {
 		utils.PrintError(err)
 		os.Exit(1)
 	}
-	ctx := aws.InitiateVariablesAndResources(tfModule)
+	//ctx := aws.InitiateVariablesAndResources(tfModule)
+	_ = aws.InitiateVariablesAndResources(tfModule)
 	graph, err := utils.InitiateGraph()
 	if err != nil {
 		utils.PrintError(err)
@@ -52,10 +53,13 @@ func main() {
 	}*/
 	var tfAws aws.AwsData
 	
-	err = tfAws.DefaultVpcSubnet(tfModule, graph)
+	err = tfAws.CreateDefaultNodes(tfModule, graph)
 	if err != nil {
 		utils.PrintError(err)
 	}
+
+	fmt.Println(graph.String())
+	/*
 	err = tfAws.CreateGraphNodes(tfModule, ctx, graph)
 	if err != nil {
 		utils.PrintError(err)
@@ -71,4 +75,5 @@ func main() {
 	if err != nil {
 		utils.PrintError(err)
 	}
+	*/
 }

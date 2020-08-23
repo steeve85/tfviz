@@ -1,17 +1,17 @@
 package aws
 
 import (
-	"fmt"
-	"net"
-	"strings"
+	//"fmt"
+	//"net"
+	//"strings"
 
 	tfconfigs "github.com/hashicorp/terraform/configs"
 	hcl2 "github.com/hashicorp/hcl/v2"
-	"github.com/hashicorp/hcl/v2/gohcl"
+	//"github.com/hashicorp/hcl/v2/gohcl"
 	"github.com/zclconf/go-cty/cty"
 	"github.com/awalterschulze/gographviz"
 
-	"github.com/steeve85/tfviz/utils"
+	//"github.com/steeve85/tfviz/utils"
 )
 
 /*type AwsTemp struct {
@@ -115,7 +115,7 @@ func createDefaultVpc(graph *gographviz.Escape) (error) {
 	return nil
 }
 
-func createDefaultSubnet(clusterName string, graph *gographviz.Escape) (error) {
+func createDefaultSubnet(graph *gographviz.Escape, clusterName string) (error) {
 	// Creating default Subnet cluster
 	err := graph.AddSubGraph(clusterName, "cluster_aws_subnet_default", map[string]string{
 		"label": "Subnet: default",
@@ -134,6 +134,47 @@ func createDefaultSubnet(clusterName string, graph *gographviz.Escape) (error) {
 	}
 	return nil
 }
+
+func createDefaultSecurityGroup(graph *gographviz.Escape) (error) {
+	// Creating default security group
+	err := graph.AddNode("G", "sg-default", map[string]string{
+		"style": "dotted",
+		"label": "sg-default",
+	})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func createVpc(graph *gographviz.Escape, vpcName string) (error) {
+	// Creating VPC cluster
+	err := graph.AddSubGraph("G", "cluster_aws_vpc_"+vpcName, map[string]string{
+		"label": "VPC: "+vpcName,
+		"style": "rounded",
+		"bgcolor": "#EDF1F2",
+		"labeljust": "l",
+	})
+	if err != nil {
+		return err
+	}
+
+	// Adding invisible node to VPC for links
+	err = graph.AddNode("cluster_aws_vpc_"+vpcName, "aws_vpc_"+vpcName, map[string]string{
+		"shape": "point",
+		"style": "invis",
+	})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+/*
+func createSubnetNode(graph *gographviz.Escape, vpcName string) (error) {
+	// Creating Subnet cluster	
+}
+*/
 
 func InitiateVariablesAndResources(file *tfconfigs.Module) (*hcl2.EvalContext) {
 	// Create map for EvalContext to replace variables names by their values inside HCL file using DecodeBody
@@ -188,43 +229,44 @@ func InitiateVariablesAndResources(file *tfconfigs.Module) (*hcl2.EvalContext) {
 
 
 
-// This function creates default VPC/Subnet if they don't exist
-func (a *AwsData) DefaultVpcSubnet(file *tfconfigs.Module, graph *gographviz.Escape) (error) {
-	var vpc, subnet bool
+// CreateDefaultNodes creates default VPC/Subnet/Security Groups if they don't exist in the TF module
+func (a *AwsData) CreateDefaultNodes(file *tfconfigs.Module, graph *gographviz.Escape) (error) {
+	var vpc, subnet, securityGroup bool
 	for _, v := range file.ManagedResources {
 		if v.Type == "aws_vpc" {
 			vpc = true
 		} else if v.Type == "aws_subnet" {
 			subnet = true
+		} else if v.Type == "aws_security_group" {
+			securityGroup = true
 		}
 	}
 
 	if !vpc {
+		// Creating default VPC cluster
 		err := createDefaultVpc(graph)
 		if err != nil {
 			return err
 		}
 	}
+
 	if !subnet {
-		// Creating default subnet boxe
+		// Creating default subnet cluster
 		var clusterName string
 		if !vpc {
 			clusterName = "cluster_aws_vpc_default"
 		} else {
 			clusterName = "G"
 		}
-		err := graph.AddSubGraph(clusterName, "cluster_aws_subnet_default", map[string]string{
-			"label": "Subnet: default",
-		})
+		err := createDefaultSubnet(graph, clusterName)
 		if err != nil {
 			return err
 		}
+	}
 
-		// Adding invisible node to VPC for links
-		err = graph.AddNode("cluster_aws_vpc_default", "aws_subnet_default", map[string]string{
-			"shape": "point",
-			"style": "invis",
-		})
+	if !securityGroup {
+		// Creating default security group
+		err := createDefaultSecurityGroup(graph)
 		if err != nil {
 			return err
 		}
@@ -232,6 +274,13 @@ func (a *AwsData) DefaultVpcSubnet(file *tfconfigs.Module, graph *gographviz.Esc
 	return nil
 }
 
+func (a *AwsData) ParseTfResources(file *tfconfigs.Module, ctx *hcl2.EvalContext) (error) {
+	for _, v := range file.ManagedResources {
+
+	}
+}
+
+/*
 // This function creates Graphviz nodes from the TF file 
 func (a *AwsTemp) CreateGraphNodes(file *tfconfigs.Module, ctx *hcl2.EvalContext, graph *gographviz.Escape) (error) {
 	// Setting CIDR for public network (Internet)
@@ -245,22 +294,8 @@ func (a *AwsTemp) CreateGraphNodes(file *tfconfigs.Module, ctx *hcl2.EvalContext
 
 			a.CidrVpc[awsVpc.CidrBlock] = v.Type+"_"+v.Name
 
-			// Creating VPC boxes
-			err := graph.AddSubGraph("G", "cluster_"+v.Type+"_"+v.Name, map[string]string{
-				"label": "VPC: "+v.Name,
-				"style": "rounded",
-				"bgcolor": "#EDF1F2",
-				"labeljust": "l",
-			})
-			if err != nil {
-				return err
-			}
-
-			// Adding invisible node to VPC for links
-			err = graph.AddNode("cluster_"+v.Type+"_"+v.Name, v.Type+"_"+v.Name, map[string]string{
-				"shape": "point",
-				"style": "invis",
-			})
+			// Creating VPC cluster
+			err := createVpc(graph, v.Name)
 			if err != nil {
 				return err
 			}
@@ -271,9 +306,9 @@ func (a *AwsTemp) CreateGraphNodes(file *tfconfigs.Module, ctx *hcl2.EvalContext
 
 			a.CidrSubnet[awsSubnet.CidrBlock] = v.Type+"_"+v.Name
 
-			// Creating subnet boxes
+			// Creating subnet cluster
 			err := graph.AddSubGraph("cluster_"+strings.Replace(awsSubnet.VpcID, ".", "_", -1), "cluster_"+v.Type+"_"+v.Name, map[string]string{
-				"label": "Subnet: "+v.Name,
+				"label": ": "+v.Name,
 				"style": "rounded",
 				"bgcolor": "white",
 				"labeljust": "l",
@@ -318,7 +353,9 @@ func (a *AwsTemp) CreateGraphNodes(file *tfconfigs.Module, ctx *hcl2.EvalContext
 	}
 	return nil
 }
+*/
 
+/*
 // This function prepares a map of Security Groups
 func (a *AwsTemp) PrepareSecurityGroups(file *tfconfigs.Module, ctx *hcl2.EvalContext) {
 	// HCL parsing with extrapolated variables
@@ -371,7 +408,9 @@ func (a *AwsTemp) PrepareSecurityGroups(file *tfconfigs.Module, ctx *hcl2.EvalCo
 		}
 	}
 }
+*/
 
+/*
 func (a *AwsTemp) CreateGraphEdges(file *tfconfigs.Module, ctx *hcl2.EvalContext, graph *gographviz.Escape) (error) {
 	// Link Instances with their Security Groups
 	// FIXME/TODO this is a duplicate of some code below. Need refactor
@@ -534,9 +573,10 @@ func (a *AwsTemp) CreateGraphEdges(file *tfconfigs.Module, ctx *hcl2.EvalContext
 						return err
 					}
 				}
-				*/
+				*//*
 			}
 		}
 	}
 	return nil
 }
+*/
