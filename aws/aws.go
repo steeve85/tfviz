@@ -183,7 +183,7 @@ func (a *AwsTemp) DefaultVpcSubnet(file *tfconfigs.Module, graph *gographviz.Esc
 		}
 
 		// Adding invisible node to VPC for links
-		err = graph.AddNode("cluster_aws_vpc_default", "aws_subnet_default", map[string]string{
+		err = graph.AddNode("cluster_aws_subnet_default", "aws_subnet_default", map[string]string{
 			"shape": "point",
 			"style": "invis",
 		})
