@@ -43,13 +43,14 @@ func main() {
 		os.Exit(1)
 	}
 
-	tfAws := &aws.AwsTemp{
+	/*tfAws := &aws.AwsTemp{
 		SecurityGroups:		make(map[string][]string),
 		Ingress:			make(map[string][]string),
 		Egress:				make(map[string][]string),
 		CidrVpc:			make(map[string]string),
 		CidrSubnet:			make(map[string]string),
-	}
+	}*/
+	var tfAws aws.AwsData
 	
 	err = tfAws.DefaultVpcSubnet(tfModule, graph)
 	if err != nil {

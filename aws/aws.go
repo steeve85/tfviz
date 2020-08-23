@@ -14,13 +14,13 @@ import (
 	"github.com/steeve85/tfviz/utils"
 )
 
-type AwsTemp struct {
+/*type AwsTemp struct {
 	SecurityGroups		map[string][]string
 	Ingress				map[string][]string
 	Egress 				map[string][]string
 	CidrVpc				map[string]string
 	CidrSubnet			map[string]string
-}
+}*/
 
 // AwsData is a structure that contain parsed TF resources
 type AwsData struct {
@@ -96,6 +96,45 @@ type AwsSGRule struct {
 	Remain					hcl2.Body `hcl:",remain"`
 }
 
+func createDefaultVpc(graph *gographviz.Escape) (error) {
+	// Creating default VPC cluster
+	err := graph.AddSubGraph("G", "cluster_aws_vpc_default", map[string]string{
+		"label": "VPC: default",
+	})
+	if err != nil {
+		return err
+	}
+	// Adding invisible node to VPC for links
+	err = graph.AddNode("cluster_aws_vpc_default", "aws_vpc_default", map[string]string{
+		"shape": "point",
+		"style": "invis",
+	})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func createDefaultSubnet(clusterName string, graph *gographviz.Escape) (error) {
+	// Creating default Subnet cluster
+	err := graph.AddSubGraph(clusterName, "cluster_aws_subnet_default", map[string]string{
+		"label": "Subnet: default",
+	})
+	if err != nil {
+		return err
+	}
+
+	// Adding invisible node to VPC for links
+	err = graph.AddNode("cluster_aws_subnet_default", "aws_subnet_default", map[string]string{
+		"shape": "point",
+		"style": "invis",
+	})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func InitiateVariablesAndResources(file *tfconfigs.Module) (*hcl2.EvalContext) {
 	// Create map for EvalContext to replace variables names by their values inside HCL file using DecodeBody
 	ctxVariables := make(map[string]cty.Value)
@@ -147,8 +186,10 @@ func InitiateVariablesAndResources(file *tfconfigs.Module) (*hcl2.EvalContext) {
 	return ctx
 }
 
+
+
 // This function creates default VPC/Subnet if they don't exist
-func (a *AwsTemp) DefaultVpcSubnet(file *tfconfigs.Module, graph *gographviz.Escape) (error) {
+func (a *AwsData) DefaultVpcSubnet(file *tfconfigs.Module, graph *gographviz.Escape) (error) {
 	var vpc, subnet bool
 	for _, v := range file.ManagedResources {
 		if v.Type == "aws_vpc" {
@@ -159,18 +200,7 @@ func (a *AwsTemp) DefaultVpcSubnet(file *tfconfigs.Module, graph *gographviz.Esc
 	}
 
 	if !vpc {
-		// Creating default VPC boxe
-		err := graph.AddSubGraph("G", "cluster_aws_vpc_default", map[string]string{
-			"label": "VPC: default",
-		})
-		if err != nil {
-			return err
-		}
-		// Adding invisible node to VPC for links
-		err = graph.AddNode("cluster_aws_vpc_default", "aws_vpc_default", map[string]string{
-			"shape": "point",
-			"style": "invis",
-		})
+		err := createDefaultVpc(graph)
 		if err != nil {
 			return err
 		}
