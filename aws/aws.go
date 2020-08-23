@@ -22,12 +22,20 @@ type AwsTemp struct {
 	CidrSubnet			map[string]string
 }
 
+// AwsData is a structure that contain parsed TF resources
+type AwsData struct {
+	Vpc						[]AwsVpc
+	Subnet					[]AwsSubnet
+	Instance				[]AwsInstance
+	SecurityGroup			[]AwsSecurityGroup
+}
+
 // AwsVpc is a structure for AWS VPC resources
 type AwsVpc struct {
 	// The CIDR block for the VPC
 	CidrBlock				string `hcl:"cidr_block"`
 	// Other arguments
-	Remain     				hcl2.Body `hcl:",remain"`
+	Remain					hcl2.Body `hcl:",remain"`
 }
 
 // AwsSubnet is a structure for AWS Subnet resources
@@ -37,7 +45,7 @@ type AwsSubnet struct {
 	// The VPC ID
 	VpcID					string `hcl:"vpc_id"`
 	// Other arguments
-	Remain     				hcl2.Body `hcl:",remain"`
+	Remain					hcl2.Body `hcl:",remain"`
 }
 
 // AwsInstance is a structure for AWS EC2 instances resources
@@ -53,7 +61,7 @@ type AwsInstance struct {
 	// The VPC Subnet ID to launch in
 	SubnetID				*string `hcl:"subnet_id"`
 	// Other arguments
-	Remain     				hcl2.Body `hcl:",remain"`
+	Remain					hcl2.Body `hcl:",remain"`
 }
 
 // AwsSecurityGroup is a structure for AWS Security Group resources
@@ -65,7 +73,7 @@ type AwsSecurityGroup struct {
 	// A list of egress rules
 	Egress					[]AwsSGRule `hcl:"egress,block"` // FIXME make it optional?
 	// Other arguments
-	Remain     				hcl2.Body `hcl:",remain"`
+	Remain					hcl2.Body `hcl:",remain"`
 }
 
 // AwsSGRule is a structure for AWS Security Group ingress/egress blocks
@@ -85,7 +93,7 @@ type AwsSGRule struct {
 	// List of security group Group Names if using EC2-Classic, or Group IDs if using a VPC
 	SecurityGroups			*[]string `hcl:"security_groups"`
 	// Other arguments
-	Remain     				hcl2.Body `hcl:",remain"`
+	Remain					hcl2.Body `hcl:",remain"`
 }
 
 func InitiateVariablesAndResources(file *tfconfigs.Module) (*hcl2.EvalContext) {
