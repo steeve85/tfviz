@@ -3,15 +3,15 @@ package aws
 import (
 	//"fmt"
 	//"net"
-	//"strings"
+	"strings"
 
 	tfconfigs "github.com/hashicorp/terraform/configs"
 	hcl2 "github.com/hashicorp/hcl/v2"
-	//"github.com/hashicorp/hcl/v2/gohcl"
+	"github.com/hashicorp/hcl/v2/gohcl"
 	"github.com/zclconf/go-cty/cty"
 	"github.com/awalterschulze/gographviz"
 
-	//"github.com/steeve85/tfviz/utils"
+	"github.com/steeve85/tfviz/utils"
 )
 
 /*type AwsTemp struct {
@@ -22,12 +22,12 @@ import (
 	CidrSubnet			map[string]string
 }*/
 
-// AwsData is a structure that contain parsed TF resources
+// AwsData is a structure that contain maps of TF parsed resources
 type AwsData struct {
-	Vpc						[]AwsVpc
-	Subnet					[]AwsSubnet
-	Instance				[]AwsInstance
-	SecurityGroup			[]AwsSecurityGroup
+	Vpc						map[string]AwsVpc
+	Subnet					map[string]AwsSubnet
+	Instance				map[string]AwsInstance
+	SecurityGroup			map[string]AwsSecurityGroup
 }
 
 // AwsVpc is a structure for AWS VPC resources
@@ -170,11 +170,55 @@ func createVpc(graph *gographviz.Escape, vpcName string) (error) {
 	return nil
 }
 
-/*
-func createSubnetNode(graph *gographviz.Escape, vpcName string) (error) {
-	// Creating Subnet cluster	
+func createSubnet(graph *gographviz.Escape, subnetName string, awsSubnet AwsSubnet) (error) {
+	// Creating subnet cluster
+	err := graph.AddSubGraph("cluster_"+strings.Replace(awsSubnet.VpcID, ".", "_", -1), "cluster_aws_subnet_"+subnetName, map[string]string{
+		"label": "Subnet: "+subnetName,
+		"style": "rounded",
+		"bgcolor": "white",
+		"labeljust": "l",
+	})
+	if err != nil {
+		return err
+	}
+	
+	// Adding invisible node to Subnet for links
+	err = graph.AddNode("cluster_aws_subnet_"+subnetName, "aws_subnet_"+subnetName, map[string]string{
+		"shape": "point",
+		"style": "invis",
+	})
+	if err != nil {
+		return err
+	}
+	return nil
 }
-*/
+
+func createInstance(graph *gographviz.Escape, instanceName string, awsInstance AwsInstance) (error) {
+	// Creating instance node
+	var clusterId string
+	if awsInstance.SubnetID == nil {
+		clusterId = "aws_subnet_default"
+	} else {
+		clusterId = strings.Replace(*awsInstance.SubnetID, ".", "_", -1)
+	}
+	err := graph.AddNode("cluster_"+clusterId, "aws_instance_"+instanceName, map[string]string{
+		//"style": "filled",
+		"label": instanceName,
+		//"fontsize": "10",
+		"image": "./aws/icons/ec2.png",
+		//"imagescale": "true",
+		//"fixedsize": "true",
+		"shape": "none",
+	})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+
+
+
 
 func InitiateVariablesAndResources(file *tfconfigs.Module) (*hcl2.EvalContext) {
 	// Create map for EvalContext to replace variables names by their values inside HCL file using DecodeBody
@@ -274,86 +318,58 @@ func (a *AwsData) CreateDefaultNodes(file *tfconfigs.Module, graph *gographviz.E
 	return nil
 }
 
-func (a *AwsData) ParseTfResources(file *tfconfigs.Module, ctx *hcl2.EvalContext) (error) {
+func (a *AwsData) ParseTfResources(file *tfconfigs.Module, ctx *hcl2.EvalContext, graph *gographviz.Escape) (error) {
 	for _, v := range file.ManagedResources {
-
-	}
-}
-
-/*
-// This function creates Graphviz nodes from the TF file 
-func (a *AwsTemp) CreateGraphNodes(file *tfconfigs.Module, ctx *hcl2.EvalContext, graph *gographviz.Escape) (error) {
-	// Setting CIDR for public network (Internet)
-	//a.Cidr["0.0.0.0/0"] = "Internet"
-	// HCL parsing with extrapolated variables
-	for _, v := range file.ManagedResources {
-		if v.Type == "aws_vpc" {
+		switch v.Type {
+		case "aws_vpc":
 			var awsVpc AwsVpc
 			diags := gohcl.DecodeBody(v.Config, ctx, &awsVpc)
 			utils.PrintDiags(diags)
 
-			a.CidrVpc[awsVpc.CidrBlock] = v.Type+"_"+v.Name
+			// Add AwsVpc to AwsData
+			a.Vpc[v.Name] = awsVpc
 
-			// Creating VPC cluster
+			// TODO: to move in a separate createGraph function
+			// Add VPC cluster to graph
 			err := createVpc(graph, v.Name)
 			if err != nil {
 				return err
 			}
-		} else if v.Type == "aws_subnet" {
+		case "aws_subnet":
 			var awsSubnet AwsSubnet
 			diags := gohcl.DecodeBody(v.Config, ctx, &awsSubnet)
 			utils.PrintDiags(diags)
 
-			a.CidrSubnet[awsSubnet.CidrBlock] = v.Type+"_"+v.Name
+			// Add AwsSubnet to AwsData
+			a.Subnet[v.Name] = awsSubnet
 
-			// Creating subnet cluster
-			err := graph.AddSubGraph("cluster_"+strings.Replace(awsSubnet.VpcID, ".", "_", -1), "cluster_"+v.Type+"_"+v.Name, map[string]string{
-				"label": ": "+v.Name,
-				"style": "rounded",
-				"bgcolor": "white",
-				"labeljust": "l",
-			})
+			// TODO: to move in a separate createGraph function
+			// Add subnet cluster to graph
+			err := createSubnet(graph, v.Name, awsSubnet)
 			if err != nil {
 				return err
 			}
-			
-			// Adding invisible node to VPC for links
-			err = graph.AddNode("cluster_"+v.Type+"_"+v.Name, v.Type+"_"+v.Name, map[string]string{
-				"shape": "point",
-				"style": "invis",
-			})
-			if err != nil {
-				return err
-			}
-		} else if v.Type == "aws_instance" {
+		case "aws_instance":
 			var awsInstance AwsInstance
 			diags := gohcl.DecodeBody(v.Config, ctx, &awsInstance)
 			utils.PrintDiags(diags)
+			
+			// Add AwsInstance to AwsData
+			a.Instance[v.Name] = awsInstance
 
-			// Creating Instance nodes
-			var clusterId string
-			if awsInstance.SubnetID == nil {
-				clusterId = "aws_subnet_default"
-			} else {
-				clusterId = strings.Replace(*awsInstance.SubnetID, ".", "_", -1)
-			}
-			err := graph.AddNode("cluster_"+clusterId, v.Type+"_"+v.Name, map[string]string{
-				//"style": "filled",
-				"label": v.Name,
-				//"fontsize": "10",
-				"image": "./aws/icons/ec2.png",
-				//"imagescale": "true",
-				//"fixedsize": "true",
-				"shape": "none",
-			})
+			// TODO: to move in a separate createGraph function
+			// Add instance node to graph
+			err := createInstance(graph, v.Name, awsInstance)
 			if err != nil {
 				return err
 			}
 		}
 	}
+
 	return nil
 }
-*/
+
+
 
 /*
 // This function prepares a map of Security Groups

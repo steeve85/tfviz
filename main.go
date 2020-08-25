@@ -36,8 +36,7 @@ func main() {
 		utils.PrintError(err)
 		os.Exit(1)
 	}
-	//ctx := aws.InitiateVariablesAndResources(tfModule)
-	_ = aws.InitiateVariablesAndResources(tfModule)
+	ctx := aws.InitiateVariablesAndResources(tfModule)
 	graph, err := utils.InitiateGraph()
 	if err != nil {
 		utils.PrintError(err)
@@ -51,12 +50,24 @@ func main() {
 		CidrVpc:			make(map[string]string),
 		CidrSubnet:			make(map[string]string),
 	}*/
-	var tfAws aws.AwsData
+	//var tfAws aws.AwsData
+
+	tfAws := &aws.AwsData{
+		Vpc:				make(map[string]aws.AwsVpc),
+		Subnet:				make(map[string]aws.AwsSubnet),
+		Instance:			make(map[string]aws.AwsInstance),
+	}
 	
 	err = tfAws.CreateDefaultNodes(tfModule, graph)
 	if err != nil {
 		utils.PrintError(err)
 	}
+
+	err = tfAws.ParseTfResources(tfModule, ctx, graph)
+	if err != nil {
+		utils.PrintError(err)
+	}
+	
 
 	fmt.Println(graph.String())
 	/*
