@@ -329,12 +329,6 @@ func (a *AwsData) ParseTfResources(file *tfconfigs.Module, ctx *hcl2.EvalContext
 			// Add AwsVpc to AwsData
 			a.Vpc[v.Name] = awsVpc
 
-			// TODO: to move in a separate createGraph function
-			// Add VPC cluster to graph
-			err := createVpc(graph, v.Name)
-			if err != nil {
-				return err
-			}
 		case "aws_subnet":
 			var awsSubnet AwsSubnet
 			diags := gohcl.DecodeBody(v.Config, ctx, &awsSubnet)
@@ -343,12 +337,6 @@ func (a *AwsData) ParseTfResources(file *tfconfigs.Module, ctx *hcl2.EvalContext
 			// Add AwsSubnet to AwsData
 			a.Subnet[v.Name] = awsSubnet
 
-			// TODO: to move in a separate createGraph function
-			// Add subnet cluster to graph
-			err := createSubnet(graph, v.Name, awsSubnet)
-			if err != nil {
-				return err
-			}
 		case "aws_instance":
 			var awsInstance AwsInstance
 			diags := gohcl.DecodeBody(v.Config, ctx, &awsInstance)
@@ -357,18 +345,47 @@ func (a *AwsData) ParseTfResources(file *tfconfigs.Module, ctx *hcl2.EvalContext
 			// Add AwsInstance to AwsData
 			a.Instance[v.Name] = awsInstance
 
-			// TODO: to move in a separate createGraph function
-			// Add instance node to graph
-			err := createInstance(graph, v.Name, awsInstance)
-			if err != nil {
-				return err
-			}
+		case "aws_security_group":
+			var awsSecurityGroup AwsSecurityGroup
+			diags := gohcl.DecodeBody(v.Config, ctx, &awsSecurityGroup)
+			utils.PrintDiags(diags)
+
+			// Add AwsSecurityGroup to AwsData
+			a.SecurityGroup[v.Name] = awsSecurityGroup
 		}
 	}
 
 	return nil
 }
 
+
+func (a *AwsData) CreateGraphNodes(graph *gographviz.Escape) (error) {
+	// Add VPC clusters to graph
+	for vpcName, _ := range a.Vpc {
+		err := createVpc(graph, vpcName)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Add Subnet clusters to graph
+	for subnetName, subnetObj := range a.Subnet {
+		err := createSubnet(graph, subnetName, subnetObj)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Add Instance nodes to graph
+	for instanceName, instanceObj := range a.Instance {
+		err := createInstance(graph, instanceName, instanceObj)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
 
 
 /*

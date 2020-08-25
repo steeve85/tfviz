@@ -56,6 +56,7 @@ func main() {
 		Vpc:				make(map[string]aws.AwsVpc),
 		Subnet:				make(map[string]aws.AwsSubnet),
 		Instance:			make(map[string]aws.AwsInstance),
+		SecurityGroup:		make(map[string]aws.AwsSecurityGroup),
 	}
 	
 	err = tfAws.CreateDefaultNodes(tfModule, graph)
@@ -67,7 +68,12 @@ func main() {
 	if err != nil {
 		utils.PrintError(err)
 	}
-	
+
+	err = tfAws.CreateGraphNodes(graph)
+	if err != nil {
+		utils.PrintError(err)
+	}
+
 
 	fmt.Println(graph.String())
 	/*
