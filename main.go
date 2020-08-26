@@ -74,6 +74,12 @@ func main() {
 		utils.PrintError(err)
 	}
 
+	//fmt.Println(graph.String())
+
+	err = tfAws.CreateGraphEdges(graph)
+	if err != nil {
+		utils.PrintError(err)
+	}
 
 	fmt.Println(graph.String())
 	/*
