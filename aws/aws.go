@@ -14,6 +14,13 @@ import (
 	"github.com/steeve85/tfviz/utils"
 )
 
+
+// IgnoreIngress can be used to not create edges for Ingress rules
+var IgnoreIngress bool
+
+// IgnoreEgress can be used to not create edges for Egress rules
+var IgnoreEgress bool
+
 // Data is a structure that contain maps of TF parsed resources
 type Data struct {
 	defaultVpc				bool
@@ -588,7 +595,9 @@ func (a *Data) CreateGraphEdges(graph *gographviz.Escape) (error) {
 
 			// Parse Ingress SG rules
 			//a.parseIngress("aws_instance_"+instanceName, a.SecurityGroup[sgName].Ingress, graph)
-			a.parseIngress("aws_instance_"+instanceName, sg, graph)
+			if !IgnoreIngress {
+				a.parseIngress("aws_instance_"+instanceName, sg, graph)
+			}
 
 			// Parse Egress SG rules
 			//TODO

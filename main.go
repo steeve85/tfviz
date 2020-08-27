@@ -14,8 +14,10 @@ func main() {
 	inputFlag := flag.String("input", ".", "Path to Terraform file or directory ")
 	outputFlag := flag.String("output", "tfviz.bin", "Path to the exported file")
 	formatFlag := flag.String("format", "png", "Format for the output file: dot, jpeg, pdf, png")
-	disableEdge := flag.Bool("disableedges", false, "Set to disable edges on the graph")
+	disableEdge := flag.Bool("disableedges", false, "Set to disable edges (Security Groups rules) on the graph")
 	flag.BoolVar(&utils.Ignorewarnings, "ignorewarnings", false, "Set to ignore warning messages")
+	flag.BoolVar(&aws.IgnoreIngress, "ignoreingress", false, "Set to ignore ingress rules")
+	flag.BoolVar(&aws.IgnoreEgress, "ignoreegress", false, "Set to ignore egress rules")
 	flag.Parse()
 
 	// checking that export format is supported
@@ -58,7 +60,7 @@ func main() {
 		SecurityGroup:		make(map[string]aws.SecurityGroup),
 		SecurityGroupNodeLinks:		make(map[string][]string),
 	}
-	
+
 	fmt.Printf("[3/%d] Creating default nodes (if needed)\n", stepsNb)
 	err = tfAws.CreateDefaultNodes(tfModule, graph)
 	if err != nil {
@@ -84,12 +86,10 @@ func main() {
 			utils.PrintError(err)
 		}
 	}
-	
-	
+
 	fmt.Printf("[%d/%d] ", stepsNb, stepsNb)
 	err = utils.ExportGraphToFile(*outputFlag, *formatFlag, graph)
 	if err != nil {
 		utils.PrintError(err)
 	}
-	
 }
