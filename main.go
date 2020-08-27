@@ -14,6 +14,7 @@ func main() {
 	inputFlag := flag.String("input", ".", "Path to Terraform file or directory ")
 	outputFlag := flag.String("output", "tfviz.bin", "Path to the exported file")
 	formatFlag := flag.String("format", "png", "Format for the output file: dot, jpeg, pdf, png")
+	disableEdge := flag.Bool("disableedges", false, "Set to disable edges on the graph")
 	flag.BoolVar(&utils.Ignorewarnings, "ignorewarnings", false, "Set to ignore warning messages")
 	flag.Parse()
 
@@ -30,7 +31,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	fmt.Print("[1/7] ")
+	stepsNb := 7
+	if *disableEdge {
+		stepsNb--
+	}
+	fmt.Printf("[1/%d] ", stepsNb)
 	tfModule, err := utils.ParseTFfile(*inputFlag)
 	if err != nil {
 		// invalid input directory/file
@@ -38,7 +43,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	fmt.Println("[2/7] Initiating variables and Terraform references")
+	fmt.Printf("[2/%d] Initiating variables and Terraform references\n", stepsNb)
 	ctx := aws.InitiateVariablesAndResources(tfModule)
 	graph, err := utils.InitiateGraph()
 	if err != nil {
@@ -54,31 +59,34 @@ func main() {
 		SecurityGroupNodeLinks:		make(map[string][]string),
 	}
 	
-	fmt.Println("[3/7] Creating default nodes (if needed)")
+	fmt.Printf("[3/%d] Creating default nodes (if needed)\n", stepsNb)
 	err = tfAws.CreateDefaultNodes(tfModule, graph)
 	if err != nil {
 		utils.PrintError(err)
 	}
 
-	fmt.Println("[4/7] Parsing TF resources")
+	fmt.Printf("[4/%d] Parsing TF resources\n", stepsNb)
 	err = tfAws.ParseTfResources(tfModule, ctx, graph)
 	if err != nil {
 		utils.PrintError(err)
 	}
 
-	fmt.Println("[5/7] Creating Graph nodes")
+	fmt.Printf("[5/%d] Creating Graph nodes\n", stepsNb)
 	err = tfAws.CreateGraphNodes(graph)
 	if err != nil {
 		utils.PrintError(err)
 	}
 
-	fmt.Println("[6/7] Creating Graph edges")
-	err = tfAws.CreateGraphEdges(graph)
-	if err != nil {
-		utils.PrintError(err)
+	if !*disableEdge {
+		fmt.Printf("[6/%d] Creating Graph edges\n", stepsNb)
+		err = tfAws.CreateGraphEdges(graph)
+		if err != nil {
+			utils.PrintError(err)
+		}
 	}
 	
-	fmt.Print("[7/7] ")
+	
+	fmt.Printf("[%d/%d] ", stepsNb, stepsNb)
 	err = utils.ExportGraphToFile(*outputFlag, *formatFlag, graph)
 	if err != nil {
 		utils.PrintError(err)
