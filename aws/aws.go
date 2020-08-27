@@ -1,7 +1,7 @@
 package aws
 
 import (
-	//"fmt"
+	"fmt"
 	"net"
 	"strings"
 
@@ -20,6 +20,9 @@ var IgnoreIngress bool
 
 // IgnoreEgress can be used to not create edges for Egress rules
 var IgnoreEgress bool
+
+// Verbose enables verbose mode if set to true
+var Verbose bool
 
 // Data is a structure that contain maps of TF parsed resources
 type Data struct {
@@ -104,6 +107,9 @@ type SGRule struct {
 
 func createDefaultVpc(graph *gographviz.Escape) (error) {
 	// Create default VPC cluster
+	if Verbose == true {
+		fmt.Println("[VERBOSE] AddSubGraph: cluster_aws_vpc_default // Create Default VPC")
+	}
 	err := graph.AddSubGraph("G", "cluster_aws_vpc_default", map[string]string{
 		"label": "VPC: default",
 	})
@@ -111,6 +117,9 @@ func createDefaultVpc(graph *gographviz.Escape) (error) {
 		return err
 	}
 	// Adding invisible node to VPC for links
+	if Verbose == true {
+		fmt.Println("[VERBOSE] AddNode: aws_vpc_default to cluster_aws_vpc_default")
+	}
 	err = graph.AddNode("cluster_aws_vpc_default", "aws_vpc_default", map[string]string{
 		"shape": "point",
 		"style": "invis",
@@ -123,6 +132,9 @@ func createDefaultVpc(graph *gographviz.Escape) (error) {
 
 func createDefaultSubnet(graph *gographviz.Escape, clusterName string) (error) {
 	// Create default Subnet cluster
+	if Verbose == true {
+		fmt.Printf("[VERBOSE] AddNode: cluster_aws_subnet_default to %s // Create Default Subnet\n", clusterName)
+	}
 	err := graph.AddSubGraph(clusterName, "cluster_aws_subnet_default", map[string]string{
 		"label": "Subnet: default",
 	})
@@ -131,6 +143,9 @@ func createDefaultSubnet(graph *gographviz.Escape, clusterName string) (error) {
 	}
 
 	// Adding invisible node to VPC for links
+	if Verbose == true {
+		fmt.Println("[VERBOSE] AddNode: aws_subnet_default to cluster_aws_subnet_default")
+	}
 	err = graph.AddNode("cluster_aws_subnet_default", "aws_subnet_default", map[string]string{
 		"shape": "point",
 		"style": "invis",
@@ -143,6 +158,9 @@ func createDefaultSubnet(graph *gographviz.Escape, clusterName string) (error) {
 
 func createDefaultSecurityGroup(graph *gographviz.Escape) (error) {
 	// Create default security group
+	if Verbose == true {
+		fmt.Println("[VERBOSE] AddNode: sg-default to G // Create default Security Group")
+	}
 	err := graph.AddNode("G", "sg-default", map[string]string{
 		"style": "dotted",
 		"label": "sg-default",
@@ -155,6 +173,9 @@ func createDefaultSecurityGroup(graph *gographviz.Escape) (error) {
 
 func createVpc(graph *gographviz.Escape, vpcName string) (error) {
 	// Create VPC cluster
+	if Verbose == true {
+		fmt.Printf("[VERBOSE] AddSubGraph: cluster_aws_vpc_%s to G // Create VPC\n", vpcName)
+	}
 	err := graph.AddSubGraph("G", "cluster_aws_vpc_"+vpcName, map[string]string{
 		"label": "VPC: "+vpcName,
 		"style": "rounded",
@@ -166,6 +187,9 @@ func createVpc(graph *gographviz.Escape, vpcName string) (error) {
 	}
 
 	// Adding invisible node to VPC for links
+	if Verbose == true {
+		fmt.Printf("[VERBOSE] AddNode: aws_vpc_%s to cluster_aws_vpc_%s\n", vpcName, vpcName)
+	}
 	err = graph.AddNode("cluster_aws_vpc_"+vpcName, "aws_vpc_"+vpcName, map[string]string{
 		"shape": "point",
 		"style": "invis",
@@ -178,7 +202,11 @@ func createVpc(graph *gographviz.Escape, vpcName string) (error) {
 
 func createSubnet(graph *gographviz.Escape, subnetName string, awsSubnet Subnet) (error) {
 	// Create subnet cluster
-	err := graph.AddSubGraph("cluster_"+strings.Replace(awsSubnet.VpcID, ".", "_", -1), "cluster_aws_subnet_"+subnetName, map[string]string{
+	vpcID := strings.Replace(awsSubnet.VpcID, ".", "_", -1)
+	if Verbose == true {
+		fmt.Printf("[VERBOSE] AddSubGraph: cluster_aws_subnet_%s to cluster_%s // Create Subnet\n", subnetName, vpcID)
+	}
+	err := graph.AddSubGraph("cluster_"+vpcID, "cluster_aws_subnet_"+subnetName, map[string]string{
 		"label": "Subnet: "+subnetName,
 		"style": "rounded",
 		"bgcolor": "white",
@@ -187,8 +215,11 @@ func createSubnet(graph *gographviz.Escape, subnetName string, awsSubnet Subnet)
 	if err != nil {
 		return err
 	}
-	
+
 	// Adding invisible node to Subnet for links
+	if Verbose == true {
+		fmt.Printf("[VERBOSE] AddNode: aws_subnet_%s to cluster_aws_subnet_%s\n", subnetName, subnetName)
+	}
 	err = graph.AddNode("cluster_aws_subnet_"+subnetName, "aws_subnet_"+subnetName, map[string]string{
 		"shape": "point",
 		"style": "invis",
@@ -207,6 +238,9 @@ func createInstance(graph *gographviz.Escape, instanceName string, awsInstance I
 	} else {
 		clusterID = strings.Replace(*awsInstance.SubnetID, ".", "_", -1)
 	}
+	if Verbose == true {
+		fmt.Printf("[VERBOSE] AddNode: aws_instance_%s to cluster_%s // Create Instance\n", instanceName, clusterID)
+	}
 	err := graph.AddNode("cluster_"+clusterID, "aws_instance_"+instanceName, map[string]string{
 		//"style": "filled",
 		"label": instanceName,
@@ -221,9 +255,6 @@ func createInstance(graph *gographviz.Escape, instanceName string, awsInstance I
 	}
 	return nil
 }
-
-
-
 
 // InitiateVariablesAndResources parses TF file to create Variables / Obj references for interpolation
 func InitiateVariablesAndResources(file *tfconfigs.Module) (*hcl2.EvalContext) {
@@ -329,6 +360,9 @@ func (a *Data) ParseTfResources(file *tfconfigs.Module, ctx *hcl2.EvalContext, g
 	for _, v := range file.ManagedResources {
 		switch v.Type {
 		case "aws_vpc":
+			if Verbose == true {
+				fmt.Printf("[VERBOSE] Decoding %s.%s\n", v.Type, v.Name)
+			}
 			var Vpc Vpc
 			diags := gohcl.DecodeBody(v.Config, ctx, &Vpc)
 			utils.PrintDiags(diags)
@@ -337,6 +371,9 @@ func (a *Data) ParseTfResources(file *tfconfigs.Module, ctx *hcl2.EvalContext, g
 			a.Vpc[v.Name] = Vpc
 
 		case "aws_subnet":
+			if Verbose == true {
+				fmt.Printf("[VERBOSE] Decoding %s.%s\n", v.Type, v.Name)
+			}
 			var awsSubnet Subnet
 			diags := gohcl.DecodeBody(v.Config, ctx, &awsSubnet)
 			utils.PrintDiags(diags)
@@ -345,6 +382,9 @@ func (a *Data) ParseTfResources(file *tfconfigs.Module, ctx *hcl2.EvalContext, g
 			a.Subnet[v.Name] = awsSubnet
 
 		case "aws_instance":
+			if Verbose == true {
+				fmt.Printf("[VERBOSE] Decoding %s.%s\n", v.Type, v.Name)
+			}
 			var awsInstance Instance
 			diags := gohcl.DecodeBody(v.Config, ctx, &awsInstance)
 			utils.PrintDiags(diags)
@@ -375,12 +415,20 @@ func (a *Data) ParseTfResources(file *tfconfigs.Module, ctx *hcl2.EvalContext, g
 			}
 
 		case "aws_security_group":
+			if Verbose == true {
+				fmt.Printf("[VERBOSE] Decoding %s.%s\n", v.Type, v.Name)
+			}
 			var awsSecurityGroup SecurityGroup
 			diags := gohcl.DecodeBody(v.Config, ctx, &awsSecurityGroup)
 			utils.PrintDiags(diags)
 
 			// Add SecurityGroup to Data
 			a.SecurityGroup["aws_security_group."+v.Name] = awsSecurityGroup
+		
+		default:
+			if Verbose == true {
+				fmt.Printf("[VERBOSE] Can't decode %s.%s (not yet supported)\n", v.Type, v.Name)
+			}
 		}
 	}
 
@@ -418,6 +466,9 @@ func (a *Data) CreateGraphNodes(graph *gographviz.Escape) (error) {
 
 func createInternetIngressEdge(dst string, graph *gographviz.Escape) (error) {
 	// Highlight Ingress from 0.0.0.0/0 in red
+	if Verbose == true {
+		fmt.Printf("[VERBOSE] AddEdge: %s -> Internet\n", dst)
+	}
 	err := graph.AddEdge("Internet", dst, true, map[string]string{
 		"color": "red",
 	})
@@ -432,6 +483,9 @@ func (a *Data) parseIngress(dst string, sgName string, graph *gographviz.Escape)
 		_, found := utils.Find(a.undefinedSecurityGroups, sgName)
 		if !found {
 			// If the SG is not in defined in TF, we need to create the Node before the Edges
+			if Verbose == true {
+				fmt.Printf("[VERBOSE] AddNode: %s to G\n", sgName)
+			}
 			err := graph.AddNode("G", sgName, map[string]string{
 				"style": "dotted",
 				"label": sgName,
@@ -443,6 +497,9 @@ func (a *Data) parseIngress(dst string, sgName string, graph *gographviz.Escape)
 		}
 
 		// The SG exists, we just need to link it with the appropriate intances
+		if Verbose == true {
+			fmt.Printf("[VERBOSE] AddEdge: %s -> %s\n", sgName, dst)
+		}
 		err := graph.AddEdge(sgName, dst, true, nil)
 		if err != nil {
 			return err
@@ -473,6 +530,9 @@ func (a *Data) parseIngress(dst string, sgName string, graph *gographviz.Escape)
 							}
 							if ipNetSubnet.Contains(ipAddrSG) {
 								// the source IP is part of this subnet CIDR
+								if Verbose == true {
+									fmt.Printf("[VERBOSE] AddEdge: aws_subnet_%s -> %s\n", k, dst)
+								}
 								err = graph.AddEdge("aws_subnet_"+k, dst, true, nil)
 								if err != nil {
 									return err
@@ -491,6 +551,9 @@ func (a *Data) parseIngress(dst string, sgName string, graph *gographviz.Escape)
 								}
 								if ipNetVpc.Contains(ipAddrSG) {
 									// the source IP is part of this VPC CIDR
+									if Verbose == true {
+										fmt.Printf("[VERBOSE] AddEdge: aws_vpc_%s -> %s\n", k, dst)
+									}
 									err = graph.AddEdge("aws_vpc_"+k, dst, true, nil)
 									if err != nil {
 										return err
@@ -503,9 +566,15 @@ func (a *Data) parseIngress(dst string, sgName string, graph *gographviz.Escape)
 						if !edgeCreated {
 							// Security Group source IP did not matched with Subnet and VPC CIDRs
 							// Creating a node for the source as it is likely to be an undefined IP/CIDR
+							if Verbose == true {
+								fmt.Printf("[VERBOSE] AddNode: %s to G\n", src)
+							}
 							err := graph.AddNode("G", src, nil)
 							if err != nil {
 								return err
+							}
+							if Verbose == true {
+								fmt.Printf("[VERBOSE] AddEdge: %s -> %s\n", src, dst)
 							}
 							err = graph.AddEdge(src, dst, true, nil)
 							if err != nil {
@@ -522,6 +591,9 @@ func (a *Data) parseIngress(dst string, sgName string, graph *gographviz.Escape)
 			for _, v1 := range a.SecurityGroupNodeLinks[sgName] {
 				v2 := strings.Replace(v1, ".", "_", -1)
 				if v2 != dst {
+					if Verbose == true {
+						fmt.Printf("[VERBOSE] AddEdge: %s -> %s\n", v2, dst)
+					}
 					err := graph.AddEdge(v2, dst, true, nil)
 					if err != nil {
 						return err
@@ -536,6 +608,9 @@ func (a *Data) parseIngress(dst string, sgName string, graph *gographviz.Escape)
 				for _, v2 := range a.SecurityGroupNodeLinks[v1] {
 					v3 := strings.Replace(v2, ".", "_", -1)
 					if v3 != dst {
+						if Verbose == true {
+							fmt.Printf("[VERBOSE] AddEdge: %s -> %s\n", v3, dst)
+						}
 						err := graph.AddEdge(v3, dst, true, nil)
 						if err != nil {
 							return err
@@ -574,6 +649,9 @@ func (a *Data) CreateGraphEdges(graph *gographviz.Escape) (error) {
 					return err
 				}
 				a.undefinedSecurityGroups = append(a.undefinedSecurityGroups, "sg-default")
+			}
+			if Verbose == true {
+				fmt.Printf("[VERBOSE] AddEdge: sg-default -> aws_instance_%s\n", instanceName)
 			}
 			err := graph.AddEdge("sg-default", "aws_instance_"+instanceName, true, nil)
 			if err != nil {

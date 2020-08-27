@@ -15,10 +15,17 @@ func main() {
 	outputFlag := flag.String("output", "tfviz.bin", "Path to the exported file")
 	formatFlag := flag.String("format", "png", "Format for the output file: dot, jpeg, pdf, png")
 	disableEdge := flag.Bool("disableedges", false, "Set to disable edges (Security Groups rules) on the graph")
+	verbose := flag.Bool("verbose", false, "Set to enable verbose output")
 	flag.BoolVar(&utils.Ignorewarnings, "ignorewarnings", false, "Set to ignore warning messages")
 	flag.BoolVar(&aws.IgnoreIngress, "ignoreingress", false, "Set to ignore ingress rules")
 	flag.BoolVar(&aws.IgnoreEgress, "ignoreegress", false, "Set to ignore egress rules")
 	flag.Parse()
+
+	// Verbose mode
+	if *verbose {
+		aws.Verbose = true
+		utils.Verbose = true
+	}
 
 	// checking that export format is supported
 	_, found := utils.Find(exportFormats, *formatFlag)

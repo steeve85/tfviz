@@ -15,6 +15,9 @@ import (
 // Ignorewarnings is used to ignore warnings if set to true. Default is false (warnings will be displayed)
 var Ignorewarnings bool
 
+// Verbose enables verbose mode if set to true
+var Verbose bool
+
 // PrintError displays errors
 func PrintError(err error) {
 	e := fmt.Errorf("[ERROR] %s", err)
@@ -47,6 +50,9 @@ func ExportGraphToFile(outputPath string, outputFormat string, graph *gographviz
 		tFlag := fmt.Sprintf("-T%s", outputFormat)
 		cmd := exec.Command("dot", tFlag, "-o", outputPath)
 		cmd.Stdin = strings.NewReader(graph.String())
+		if Verbose == true {
+			fmt.Printf("[VERBOSE] Running command: %s\n", cmd.String())
+		}
 		err := cmd.Run()
 		if err != nil {
 			return err
@@ -97,9 +103,11 @@ func InitiateGraph() (*gographviz.Escape, error) {
 	g.SetDir(true)
 	//g.AddAttr("G", "fontsize", "10")
 
-	var err error
+	if Verbose == true {
+		fmt.Println("[VERBOSE] AddNode: Internet to G")
+	}
 	// Adding node for Internet representation
-	err = g.AddNode("G", "Internet", map[string]string{
+	err := g.AddNode("G", "Internet", map[string]string{
 		"shape": "none",
 		"label": "Internet",
 		"labelloc": "b",
