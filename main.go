@@ -30,12 +30,15 @@ func main() {
 		os.Exit(1)
 	}
 
+	fmt.Print("[1/7] ")
 	tfModule, err := utils.ParseTFfile(*inputFlag)
 	if err != nil {
 		// invalid input directory/file
 		utils.PrintError(err)
 		os.Exit(1)
 	}
+
+	fmt.Println("[2/7] Initiating variables and Terraform references")
 	ctx := aws.InitiateVariablesAndResources(tfModule)
 	graph, err := utils.InitiateGraph()
 	if err != nil {
@@ -43,60 +46,42 @@ func main() {
 		os.Exit(1)
 	}
 
-	/*tfAws := &aws.AwsTemp{
-		SecurityGroups:		make(map[string][]string),
-		Ingress:			make(map[string][]string),
-		Egress:				make(map[string][]string),
-		CidrVpc:			make(map[string]string),
-		CidrSubnet:			make(map[string]string),
-	}*/
-	//var tfAws aws.AwsData
-
-	tfAws := &aws.AwsData{
-		Vpc:				make(map[string]aws.AwsVpc),
-		Subnet:				make(map[string]aws.AwsSubnet),
-		Instance:			make(map[string]aws.AwsInstance),
-		SecurityGroup:		make(map[string]aws.AwsSecurityGroup),
+	tfAws := &aws.Data{
+		Vpc:				make(map[string]aws.Vpc),
+		Subnet:				make(map[string]aws.Subnet),
+		Instance:			make(map[string]aws.Instance),
+		SecurityGroup:		make(map[string]aws.SecurityGroup),
+		SecurityGroupNodeLinks:		make(map[string][]string),
 	}
 	
+	fmt.Println("[3/7] Creating default nodes (if needed)")
 	err = tfAws.CreateDefaultNodes(tfModule, graph)
 	if err != nil {
 		utils.PrintError(err)
 	}
 
+	fmt.Println("[4/7] Parsing TF resources")
 	err = tfAws.ParseTfResources(tfModule, ctx, graph)
 	if err != nil {
 		utils.PrintError(err)
 	}
 
+	fmt.Println("[5/7] Creating Graph nodes")
 	err = tfAws.CreateGraphNodes(graph)
 	if err != nil {
 		utils.PrintError(err)
 	}
 
-	//fmt.Println(graph.String())
-
+	fmt.Println("[6/7] Creating Graph edges")
 	err = tfAws.CreateGraphEdges(graph)
 	if err != nil {
 		utils.PrintError(err)
 	}
-
-	fmt.Println(graph.String())
-	/*
-	err = tfAws.CreateGraphNodes(tfModule, ctx, graph)
-	if err != nil {
-		utils.PrintError(err)
-	}
-	tfAws.PrepareSecurityGroups(tfModule, ctx)
-
-	err = tfAws.CreateGraphEdges(tfModule, ctx, graph)
-	if err != nil {
-		utils.PrintError(err)
-	}
 	
+	fmt.Print("[7/7] ")
 	err = utils.ExportGraphToFile(*outputFlag, *formatFlag, graph)
 	if err != nil {
 		utils.PrintError(err)
 	}
-	*/
+	
 }
