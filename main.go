@@ -14,7 +14,7 @@ func main() {
 	inputFlag := flag.String("input", ".", "Path to Terraform file or directory ")
 	outputFlag := flag.String("output", "tfviz.bin", "Path to the exported file")
 	formatFlag := flag.String("format", "png", "Format for the output file: dot, jpeg, pdf, png")
-	flag.BoolVar(&utils.Ignorewarnings, "Ignorewarnings", false, "Set to ignore warning messages")
+	flag.BoolVar(&utils.Ignorewarnings, "ignorewarnings", false, "Set to ignore warning messages")
 	flag.Parse()
 
 	// checking that export format is supported

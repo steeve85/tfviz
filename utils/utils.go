@@ -12,14 +12,16 @@ import (
 	"github.com/awalterschulze/gographviz"
 )
 
+// Ignorewarnings is used to ignore warnings if set to true. Default is false (warnings will be displayed)
 var Ignorewarnings bool
 
+// PrintError displays errors
 func PrintError(err error) {
 	e := fmt.Errorf("[ERROR] %s", err)
-	//fmt.Println(e.Error())
 	fmt.Println(e)
 }
 
+// PrintDiags diaplays warning messages
 func PrintDiags(diags hcl2.Diagnostics) {
 	if !Ignorewarnings {
 		if len(diags) == 1 {
@@ -33,7 +35,7 @@ func PrintDiags(diags hcl2.Diagnostics) {
 	}
 }
 
-
+// ExportGraphToFile exports Graph to file
 func ExportGraphToFile(outputPath string, outputFormat string, graph *gographviz.Escape) error {
 	fmt.Println("Exporting Graph to", outputPath)
 	if outputFormat == "dot" {
@@ -53,6 +55,7 @@ func ExportGraphToFile(outputPath string, outputFormat string, graph *gographviz
 	return nil
 }
 
+// ParseTFfile loads a file path and returns a TF module
 func ParseTFfile(configpath string) (*tfconfigs.Module, error) {
 	f, err := os.Stat(configpath);
 	if err != nil {
@@ -86,6 +89,7 @@ func ParseTFfile(configpath string) (*tfconfigs.Module, error) {
 	}
 }
 
+// InitiateGraph initializes the graph
 func InitiateGraph() (*gographviz.Escape, error) {
 	// Graph initialization
 	g := gographviz.NewEscape()
