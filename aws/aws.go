@@ -713,18 +713,7 @@ func (a *Data) CreateGraphEdges(graph *gographviz.Escape) (error) {
 		// The instance has at least one SG attached to it
 		for _, sg := range SGs {
 
-			// sg should looks like 'aws_security_group.SG_NAME'
-			//sgName := strings.Split(sg, ".")[1]
-			//fmt.Println("\t", sg)//, "->", sgName)
-
-			//fmt.Println("\tdetails:", a.SecurityGroup[sgName])
-			//fmt.Println("\t# egress:", len(a.SecurityGroup[sgName].Egress))
-			//fmt.Println("\t# ingress:", len(a.SecurityGroup[sgName].Ingress))
-			
-			//parseSGRules(graph, "aws_instance_"+instanceName, instanceObj, a.SecurityGroup[sgName])
-
 			// Parse Ingress SG rules
-			//a.parseSGRule("aws_instance_"+instanceName, a.SecurityGroup[sgName].Ingress, graph)
 			if !IgnoreIngress {
 				a.parseSGRule(ingressRule, "aws_instance_"+instanceName, sg, graph)
 			}
