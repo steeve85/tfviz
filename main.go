@@ -99,4 +99,6 @@ func main() {
 	if err != nil {
 		utils.PrintError(err)
 	}
+
+	tfAws.PrintUnsupportedResources()
 }

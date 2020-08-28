@@ -37,6 +37,8 @@ type Data struct {
 	undefinedSecurityGroups		[]string
 	// map of resources linked to a security group
 	SecurityGroupNodeLinks	map[string][]string
+	// list of unsupported resources
+	unsupportedResources	[]string
 }
 
 // Vpc is a structure for AWS VPC resources
@@ -429,6 +431,7 @@ func (a *Data) ParseTfResources(file *tfconfigs.Module, ctx *hcl2.EvalContext, g
 			if Verbose == true {
 				fmt.Printf("[VERBOSE] Can't decode %s.%s (not yet supported)\n", v.Type, v.Name)
 			}
+			a.unsupportedResources = append(a.unsupportedResources, v.Type + "." + v.Name)
 		}
 	}
 
@@ -683,4 +686,12 @@ func (a *Data) CreateGraphEdges(graph *gographviz.Escape) (error) {
 	}
 
 	return nil
+}
+
+// PrintUnsupportedResources displays all resources currently unsupported by tfviz
+func (a *Data) PrintUnsupportedResources() {
+	fmt.Println("[WARNING] Unsupported resources:")
+	for _, r := range a.unsupportedResources {
+		fmt.Println(" -", r)
+	}
 }
