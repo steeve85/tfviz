@@ -535,7 +535,7 @@ func (a *Data) parseSGRule(ruleType int, nodeName string, sgName string, graph *
 	for _, rule := range sgRule {
 		if *rule.CidrBlocks != nil {
 			for _, cidr := range *rule.CidrBlocks {
-				// Special ingress rule for 0.0.0.0/0
+				// Special ingress/egress rule for 0.0.0.0/0
 				if cidr == "0.0.0.0/0" {
 					err := createInternetSGRuleEdge(ruleType, nodeName, graph)
 					if err != nil {
@@ -547,16 +547,16 @@ func (a *Data) parseSGRule(ruleType int, nodeName string, sgName string, graph *
 						// Unrecognized SG name
 						utils.PrintError(err)
 					} else {
-						// The source is a valid CIDR
+						// The source/destination is a valid CIDR
 						edgeCreated := false
 						for k, v := range(a.Subnet) {
-							// Checking for Security Group source IP / Subnet matching
+							// Checking for Security Group source/destination IP / Subnet matching
 							_, ipNetSubnet, err := net.ParseCIDR(v.CidrBlock)
 							if err != nil {
 								return err
 							}
 							if ipNetSubnet.Contains(ipAddrSG) {
-								// the source IP is part of this subnet CIDR
+								// the source/destination IP is part of this subnet CIDR
 								if ruleType == ingressRule {
 									src, dst = "aws_subnet_"+k, nodeName
 								} else {
@@ -574,7 +574,7 @@ func (a *Data) parseSGRule(ruleType int, nodeName string, sgName string, graph *
 						}
 
 						if !edgeCreated {
-							// Security Group source IP did not matched with Subnet CIDRs
+							// Security Group source/destination IP did not matched with Subnet CIDRs
 							// Now checking with VPC CIDRs
 							for k, v := range a.Vpc {
 								_, ipNetVpc, err := net.ParseCIDR(v.CidrBlock)
@@ -582,7 +582,7 @@ func (a *Data) parseSGRule(ruleType int, nodeName string, sgName string, graph *
 									return err
 								}
 								if ipNetVpc.Contains(ipAddrSG) {
-									// the source IP is part of this VPC CIDR
+									// the source/destination IP is part of this VPC CIDR
 									if ruleType == ingressRule {
 										src, dst = "aws_vpc_"+k, nodeName
 									} else {
@@ -601,8 +601,8 @@ func (a *Data) parseSGRule(ruleType int, nodeName string, sgName string, graph *
 						}
 
 						if !edgeCreated {
-							// Security Group source IP did not matched with Subnet and VPC CIDRs
-							// Creating a node for the source as it is likely to be an undefined IP/CIDR
+							// Security Group source/destination IP did not matched with Subnet and VPC CIDRs
+							// Creating a node for the source/destination as it is likely to be an undefined IP/CIDR
 							if Verbose == true {
 								fmt.Printf("[VERBOSE] AddNode: %s to G\n", cidr)
 							}
@@ -628,7 +628,7 @@ func (a *Data) parseSGRule(ruleType int, nodeName string, sgName string, graph *
 			}
 		}
 
-		// Create edges for all instances linked to Ingress.Self
+		// Create edges for all instances linked to SGRule.Self
 		if rule.Self != nil && *rule.Self != false {
 			for _, v1 := range a.SecurityGroupNodeLinks[sgName] {
 				v2 := strings.Replace(v1, ".", "_", -1)
@@ -649,7 +649,7 @@ func (a *Data) parseSGRule(ruleType int, nodeName string, sgName string, graph *
 			}
 		}
 
-		// Create edges for all instances linked to Ingress.SecurityGroups
+		// Create edges for all instances linked to SGRule.SecurityGroups
 		if rule.SecurityGroups != nil {
 			for _, v1 := range *rule.SecurityGroups {
 				for _, v2 := range a.SecurityGroupNodeLinks[v1] {
