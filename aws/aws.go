@@ -27,6 +27,10 @@ var IgnoreEgress bool
 // Verbose enables verbose mode if set to true
 var Verbose bool
 
+// Defining values for ingress / egress rules
+const ingressRule = 1
+const egressRule = 2
+
 // Data is a structure that contain maps of TF parsed resources
 type Data struct {
 	defaultVpc				bool
@@ -495,12 +499,21 @@ func (a *Data) CreateGraphNodes(graph *gographviz.Escape) (error) {
 	return nil
 }
 
-func createInternetIngressEdge(dst string, graph *gographviz.Escape) (error) {
-	// Highlight Ingress from 0.0.0.0/0 in red
-	if Verbose == true {
-		fmt.Printf("[VERBOSE] AddEdge: %s -> Internet\n", dst)
+func createInternetSGRuleEdge(ruleType int, nodeName string, graph *gographviz.Escape) (error) {
+	// Highlight Ingress from 0.0.0.0/0 and Egress to 0.0.0.0/0 in red
+
+	// Based on the rule type Ingress or Egress define the source and destination items
+	var src, dst string
+	if ruleType == ingressRule {
+		src, dst = "Internet", nodeName
+	} else {
+		src, dst = nodeName, "Internet"
 	}
-	err := graph.AddEdge("Internet", dst, true, map[string]string{
+
+	if Verbose == true {
+		fmt.Printf("[VERBOSE] AddEdge: %s -> %s\n", src, dst)
+	}
+	err := graph.AddEdge(src, dst, true, map[string]string{
 		"color": "red",
 	})
 	if err != nil {
@@ -509,11 +522,22 @@ func createInternetIngressEdge(dst string, graph *gographviz.Escape) (error) {
 	return nil
 }
 
-func (a *Data) parseIngress(dst string, sgName string, graph *gographviz.Escape) (error) {
-	if _, found := a.SecurityGroup[sgName]; !found {
-		_, found := utils.Find(a.undefinedSecurityGroups, sgName)
-		if !found {
-			// If the SG is not in defined in TF, we need to create the Node before the Edges
+func (a *Data) parseSGRule(ruleType int, nodeName string, sgName string, graph *gographviz.Escape) (error) {
+	// Based on the rule type Ingress or Egress define the source and destination items
+	var src, dst string
+	var sgRule []SGRule
+	if ruleType == ingressRule {
+		src, dst = sgName, nodeName
+		sgRule = a.SecurityGroup[sgName].Ingress
+	} else {
+		src, dst = nodeName, sgName
+		sgRule = a.SecurityGroup[sgName].Egress
+	}
+
+	if _, found1 := a.SecurityGroup[sgName]; !found1 {
+		_, found2 := utils.Find(a.undefinedSecurityGroups, sgName)
+		if !found2 {
+			// If the SG is not defined in TF, we need to create the Node before the Edges
 			if Verbose == true {
 				fmt.Printf("[VERBOSE] AddNode: %s to G\n", sgName)
 			}
@@ -527,44 +551,49 @@ func (a *Data) parseIngress(dst string, sgName string, graph *gographviz.Escape)
 			a.undefinedSecurityGroups = append(a.undefinedSecurityGroups, sgName)
 		}
 
-		// The SG exists, we just need to link it with the appropriate intances
+		// The SG exists, we just need to link it with the appropriate nodes
 		if Verbose == true {
-			fmt.Printf("[VERBOSE] AddEdge: %s -> %s\n", sgName, dst)
+			fmt.Printf("[VERBOSE] AddEdge: %s -> %s\n", src, dst)
 		}
-		err := graph.AddEdge(sgName, dst, true, nil)
+		err := graph.AddEdge(src, dst, true, nil)
 		if err != nil {
 			return err
 		}
 	}
-	for _, rule := range a.SecurityGroup[sgName].Ingress {
+	for _, rule := range sgRule {
 		if *rule.CidrBlocks != nil {
-			for _, src := range *rule.CidrBlocks {
-				// Special ingress rule for 0.0.0.0/0
-				if src == "0.0.0.0/0" {
-					err := createInternetIngressEdge(dst, graph)
+			for _, cidr := range *rule.CidrBlocks {
+				// Special ingress/egress rule for 0.0.0.0/0
+				if cidr == "0.0.0.0/0" {
+					err := createInternetSGRuleEdge(ruleType, nodeName, graph)
 					if err != nil {
 						return err
 					}
 				} else {
-					ipAddrSG, _, err := net.ParseCIDR(src)
+					ipAddrSG, _, err := net.ParseCIDR(cidr)
 					if err != nil {
 						// Unrecognized SG name
 						utils.PrintError(err)
 					} else {
-						// The source is a valid CIDR
+						// The source/destination is a valid CIDR
 						edgeCreated := false
 						for k, v := range(a.Subnet) {
-							// Checking for Security Group source IP / Subnet matching
+							// Checking for Security Group source/destination IP / Subnet matching
 							_, ipNetSubnet, err := net.ParseCIDR(v.CidrBlock)
 							if err != nil {
 								return err
 							}
 							if ipNetSubnet.Contains(ipAddrSG) {
-								// the source IP is part of this subnet CIDR
-								if Verbose == true {
-									fmt.Printf("[VERBOSE] AddEdge: aws_subnet_%s -> %s\n", k, dst)
+								// the source/destination IP is part of this subnet CIDR
+								if ruleType == ingressRule {
+									src, dst = "aws_subnet_"+k, nodeName
+								} else {
+									src, dst = nodeName, "aws_subnet_"+k
 								}
-								err = graph.AddEdge("aws_subnet_"+k, dst, true, nil)
+								if Verbose == true {
+									fmt.Printf("[VERBOSE] AddEdge: %s -> %s\n", src, dst)
+								}
+								err = graph.AddEdge(src, dst, true, nil)
 								if err != nil {
 									return err
 								}
@@ -573,7 +602,7 @@ func (a *Data) parseIngress(dst string, sgName string, graph *gographviz.Escape)
 						}
 
 						if !edgeCreated {
-							// Security Group source IP did not matched with Subnet CIDRs
+							// Security Group source/destination IP did not matched with Subnet CIDRs
 							// Now checking with VPC CIDRs
 							for k, v := range a.Vpc {
 								_, ipNetVpc, err := net.ParseCIDR(v.CidrBlock)
@@ -581,11 +610,16 @@ func (a *Data) parseIngress(dst string, sgName string, graph *gographviz.Escape)
 									return err
 								}
 								if ipNetVpc.Contains(ipAddrSG) {
-									// the source IP is part of this VPC CIDR
-									if Verbose == true {
-										fmt.Printf("[VERBOSE] AddEdge: aws_vpc_%s -> %s\n", k, dst)
+									// the source/destination IP is part of this VPC CIDR
+									if ruleType == ingressRule {
+										src, dst = "aws_vpc_"+k, nodeName
+									} else {
+										src, dst = nodeName, "aws_vpc_"+k
 									}
-									err = graph.AddEdge("aws_vpc_"+k, dst, true, nil)
+									if Verbose == true {
+										fmt.Printf("[VERBOSE] AddEdge: %s -> %s\n", src, dst)
+									}
+									err = graph.AddEdge(src, dst, true, nil)
 									if err != nil {
 										return err
 									}
@@ -595,14 +629,19 @@ func (a *Data) parseIngress(dst string, sgName string, graph *gographviz.Escape)
 						}
 
 						if !edgeCreated {
-							// Security Group source IP did not matched with Subnet and VPC CIDRs
-							// Creating a node for the source as it is likely to be an undefined IP/CIDR
+							// Security Group source/destination IP did not matched with Subnet and VPC CIDRs
+							// Creating a node for the source/destination as it is likely to be an undefined IP/CIDR
 							if Verbose == true {
-								fmt.Printf("[VERBOSE] AddNode: %s to G\n", src)
+								fmt.Printf("[VERBOSE] AddNode: %s to G\n", cidr)
 							}
-							err := graph.AddNode("G", src, nil)
+							err := graph.AddNode("G", cidr, nil)
 							if err != nil {
 								return err
+							}
+							if ruleType == ingressRule {
+								src, dst = cidr, nodeName
+							} else {
+								src, dst = nodeName, cidr
 							}
 							if Verbose == true {
 								fmt.Printf("[VERBOSE] AddEdge: %s -> %s\n", src, dst)
@@ -617,15 +656,20 @@ func (a *Data) parseIngress(dst string, sgName string, graph *gographviz.Escape)
 			}
 		}
 
-		// Create edges for all instances linked to Ingress.Self
+		// Create edges for all instances linked to SGRule.Self
 		if rule.Self != nil && *rule.Self != false {
 			for _, v1 := range a.SecurityGroupNodeLinks[sgName] {
 				v2 := strings.Replace(v1, ".", "_", -1)
-				if v2 != dst {
-					if Verbose == true {
-						fmt.Printf("[VERBOSE] AddEdge: %s -> %s\n", v2, dst)
+				if v2 != nodeName {
+					if ruleType == ingressRule {
+						src, dst = v2, nodeName
+					} else {
+						src, dst = nodeName, v2
 					}
-					err := graph.AddEdge(v2, dst, true, nil)
+					if Verbose == true {
+						fmt.Printf("[VERBOSE] AddEdge: %s -> %s\n", src, dst)
+					}
+					err := graph.AddEdge(src, dst, true, nil)
 					if err != nil {
 						return err
 					}
@@ -633,16 +677,21 @@ func (a *Data) parseIngress(dst string, sgName string, graph *gographviz.Escape)
 			}
 		}
 
-		// Create edges for all instances linked to Ingress.SecurityGroups
+		// Create edges for all instances linked to SGRule.SecurityGroups
 		if rule.SecurityGroups != nil {
 			for _, v1 := range *rule.SecurityGroups {
 				for _, v2 := range a.SecurityGroupNodeLinks[v1] {
 					v3 := strings.Replace(v2, ".", "_", -1)
-					if v3 != dst {
-						if Verbose == true {
-							fmt.Printf("[VERBOSE] AddEdge: %s -> %s\n", v3, dst)
+					if v3 != nodeName {
+						if ruleType == ingressRule {
+							src, dst = v3, nodeName
+						} else {
+							src, dst = nodeName, v3
 						}
-						err := graph.AddEdge(v3, dst, true, nil)
+						if Verbose == true {
+							fmt.Printf("[VERBOSE] AddEdge: %s -> %s\n", src, dst)
+						}
+						err := graph.AddEdge(src, dst, true, nil)
 						if err != nil {
 							return err
 						}
@@ -692,24 +741,15 @@ func (a *Data) CreateGraphEdges(graph *gographviz.Escape) (error) {
 		// The instance has at least one SG attached to it
 		for _, sg := range SGs {
 
-			// sg should looks like 'aws_security_group.SG_NAME'
-			//sgName := strings.Split(sg, ".")[1]
-			//fmt.Println("\t", sg)//, "->", sgName)
-
-			//fmt.Println("\tdetails:", a.SecurityGroup[sgName])
-			//fmt.Println("\t# egress:", len(a.SecurityGroup[sgName].Egress))
-			//fmt.Println("\t# ingress:", len(a.SecurityGroup[sgName].Ingress))
-			
-			//parseSGRules(graph, "aws_instance_"+instanceName, instanceObj, a.SecurityGroup[sgName])
-
 			// Parse Ingress SG rules
-			//a.parseIngress("aws_instance_"+instanceName, a.SecurityGroup[sgName].Ingress, graph)
 			if !IgnoreIngress {
-				a.parseIngress("aws_instance_"+instanceName, sg, graph)
+				a.parseSGRule(ingressRule, "aws_instance_"+instanceName, sg, graph)
 			}
 
 			// Parse Egress SG rules
-			//TODO
+			if !IgnoreEgress {
+				a.parseSGRule(egressRule, "aws_instance_"+instanceName, sg, graph)
+			}
 		}
 	}
 
