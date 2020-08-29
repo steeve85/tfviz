@@ -53,7 +53,11 @@ func main() {
 	}
 
 	fmt.Printf("[2/%d] Initiating variables and Terraform references\n", stepsNb)
-	ctx := aws.InitiateVariablesAndResources(tfModule)
+	ctx, err := aws.InitiateVariablesAndResources(tfModule)
+	if err != nil {
+		utils.PrintError(err)
+		os.Exit(1)
+	}
 	graph, err := utils.InitiateGraph()
 	if err != nil {
 		utils.PrintError(err)

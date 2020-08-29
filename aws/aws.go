@@ -2,7 +2,10 @@ package aws
 
 import (
 	"fmt"
+	"io/ioutil"
 	"net"
+	"os"
+	"path"
 	"strings"
 
 	tfconfigs "github.com/hashicorp/terraform/configs"
@@ -259,7 +262,7 @@ func createInstance(graph *gographviz.Escape, instanceName string, awsInstance I
 }
 
 // InitiateVariablesAndResources parses TF file to create Variables / Obj references for interpolation
-func InitiateVariablesAndResources(file *tfconfigs.Module) (*hcl2.EvalContext) {
+func InitiateVariablesAndResources(tfModule *tfconfigs.Module) (*hcl2.EvalContext, error) {
 	// Create map for EvalContext to replace variables names by their values inside HCL file using DecodeBody
 	ctxVariables := make(map[string]cty.Value)
 	ctxVpc := make(map[string]cty.Value)
@@ -268,7 +271,7 @@ func InitiateVariablesAndResources(file *tfconfigs.Module) (*hcl2.EvalContext) {
 	ctxAwsSecurityGroup := make(map[string]cty.Value)
 
 	// Prepare context with TF variables
-	for _, v := range file.Variables {
+	for _, v := range tfModule.Variables {
 		// Handling the case there is no default value for the variable
 		if v.Default.IsNull() {
 			ctxVariables[v.Name] = cty.StringVal("var_" + v.Name)
@@ -277,8 +280,35 @@ func InitiateVariablesAndResources(file *tfconfigs.Module) (*hcl2.EvalContext) {
 		}
 	}
 
+	// Load variables from Variable Definitions (.tfvars) Files
+	// Start with terraform.tfvars file:
+	inputVariablesFile := path.Join(tfModule.SourceDir, "terraform.tfvars")
+	_, err := os.Stat(inputVariablesFile)
+	if err == nil {
+		vars, diags := tfconfigs.NewParser(nil).LoadValuesFile(inputVariablesFile)
+		utils.PrintDiags(diags)
+		for varName, varValue := range vars {
+			ctxVariables[varName] = varValue
+		}
+	}
+	// Search for .auto.tfvars files
+	files, err := ioutil.ReadDir(tfModule.SourceDir)
+	if err != nil {
+		return nil, err
+	}
+	for _, f := range files {
+		if strings.HasSuffix(f.Name(), ".auto.tfvars") {
+			inputVariablesFile := path.Join(tfModule.SourceDir, f.Name())
+			vars, diags := tfconfigs.NewParser(nil).LoadValuesFile(inputVariablesFile)
+			utils.PrintDiags(diags)
+			for varName, varValue := range vars {
+				ctxVariables[varName] = varValue
+			}
+		}
+	}
+
 	// Prepare context with named values to resources
-	for _, v := range file.ManagedResources {
+	for _, v := range tfModule.ManagedResources {
 		if v.Type == "aws_vpc" {
 			ctxVpc[v.Name] = cty.ObjectVal(map[string]cty.Value{
 				"id":    cty.StringVal(v.Type + "." + v.Name),
@@ -307,14 +337,12 @@ func InitiateVariablesAndResources(file *tfconfigs.Module) (*hcl2.EvalContext) {
 			"aws_security_group" : cty.ObjectVal(ctxAwsSecurityGroup),
 		},
 	}
-	return ctx
+	return ctx, nil
 }
 
-
-
 // CreateDefaultNodes creates default VPC/Subnet/Security Groups if they don't exist in the TF module
-func (a *Data) CreateDefaultNodes(file *tfconfigs.Module, graph *gographviz.Escape) (error) {
-	for _, v := range file.ManagedResources {
+func (a *Data) CreateDefaultNodes(tfModule *tfconfigs.Module, graph *gographviz.Escape) (error) {
+	for _, v := range tfModule.ManagedResources {
 		if v.Type == "aws_vpc" {
 			a.defaultVpc = true
 		} else if v.Type == "aws_subnet" {
@@ -358,8 +386,8 @@ func (a *Data) CreateDefaultNodes(file *tfconfigs.Module, graph *gographviz.Esca
 }
 
 // ParseTfResources parse the TF file / module to identify resources that will be used later on to create the graph
-func (a *Data) ParseTfResources(file *tfconfigs.Module, ctx *hcl2.EvalContext, graph *gographviz.Escape) (error) {
-	for _, v := range file.ManagedResources {
+func (a *Data) ParseTfResources(tfModule *tfconfigs.Module, ctx *hcl2.EvalContext, graph *gographviz.Escape) (error) {
+	for _, v := range tfModule.ManagedResources {
 		switch v.Type {
 		case "aws_vpc":
 			if Verbose == true {
