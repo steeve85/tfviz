@@ -6,6 +6,7 @@ import (
 	"net"
 	"os"
 	"path"
+	"regexp"
 	"strings"
 
 	tfconfigs "github.com/hashicorp/terraform/configs"
@@ -250,13 +251,21 @@ func createInstance(graph *gographviz.Escape, instanceName string, awsInstance I
 	if Verbose == true {
 		fmt.Printf("[VERBOSE] AddNode: aws_instance_%s to cluster_%s // Create Instance\n", instanceName, clusterID)
 	}
+
+	// Splitting label if more than 8 chars
+	re := regexp.MustCompile(`(\S{8})`)
+	labelName := strings.Join(re.FindAllString(instanceName, -1), "\\n")
+	// If instanceName is shorter than 8, labelName needs to be manually set, otherwise the string will be empty
+	if labelName == "" {
+		labelName = instanceName
+	}
+
 	err := graph.AddNode("cluster_"+clusterID, "aws_instance_"+instanceName, map[string]string{
-		//"style": "filled",
-		"label": instanceName,
-		//"fontsize": "10",
+		"label": labelName,
 		"image": "./aws/icons/ec2.png",
-		//"imagescale": "true",
-		//"fixedsize": "true",
+		"width": "1",
+		"height": "1",
+		"fixedsize": "true",
 		"shape": "none",
 	})
 	if err != nil {

@@ -101,7 +101,6 @@ func InitiateGraph() (*gographviz.Escape, error) {
 	g := gographviz.NewEscape()
 	g.SetName("G")
 	g.SetDir(true)
-	//g.AddAttr("G", "fontsize", "10")
 
 	if Verbose == true {
 		fmt.Println("[VERBOSE] AddNode: Internet to G")
