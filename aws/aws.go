@@ -41,6 +41,7 @@ type Data struct {
 	Subnet					map[string]Subnet
 	Instance				map[string]Instance
 	DBInstance				map[string]DBInstance
+	DBSubnetGroup 			map[string]DBSubnetGroup
 	SecurityGroup			map[string]SecurityGroup
 	// list of security groups not defined in the TF module
 	undefinedSecurityGroups		[]string
@@ -102,6 +103,14 @@ type DBInstance struct {
 	Username				*string `hcl:"username"`
 	// List of VPC security groups to associate
 	VpcSecurityGroupIDs		*[]string `hcl:"vpc_security_group_ids"`
+	// Other arguments
+	Remain					hcl2.Body `hcl:",remain"`
+}
+
+// DBSubnetGroup is a structure for RDS DB subnet group resources
+type DBSubnetGroup struct {
+	// A list of VPC subnet IDs
+	SubnetIDs				[]string `hcl:"subnet_ids"`
 	// Other arguments
 	Remain					hcl2.Body `hcl:",remain"`
 }
@@ -297,6 +306,49 @@ func createInstance(graph *gographviz.Escape, instanceName string, awsInstance I
 	return nil
 }
 
+
+func (a *Data) createDBInstance(graph *gographviz.Escape, instanceName string, awsInstance DBInstance) (error) {
+	// Create DB instance node
+	var clusterID string
+	// if there is no DB Subnet Group, the DB instance is created in the default VPC
+	// same if there is no VPC defined in the TF module
+	if awsInstance.DBSubnetGroupName == nil || len(a.Vpc) == 0{
+		clusterID = "aws_vpc_default"
+	} else {
+		// TODO: support multiple subnets from the DB Subnet group
+		// - how to show a DB in multiple subnets?
+		// - can a node be part of 2 subgraph (in graphviz)?
+		// For now, only the first one is used
+		tmpDBname := strings.Split(*awsInstance.DBSubnetGroupName, ".")[1]
+		tmpSubnetName := strings.Split(a.DBSubnetGroup[tmpDBname].SubnetIDs[0], ".")[1]
+		clusterID = "aws_vpc_" + a.Subnet[tmpSubnetName].VpcID
+	}
+	if Verbose == true {
+		fmt.Printf("[VERBOSE] AddNode: aws_db_instance_%s to cluster_%s // Create DB Instance\n", instanceName, clusterID)
+	}
+
+	// Splitting label if more than 8 chars
+	re := regexp.MustCompile(`(\S{8})`)
+	labelName := strings.Join(re.FindAllString(instanceName, -1), "\\n")
+	// If instanceName is shorter than 8, labelName needs to be manually set, otherwise the string will be empty
+	if labelName == "" {
+		labelName = instanceName
+	}
+
+	err := graph.AddNode("cluster_"+clusterID, "aws_db_instance_"+instanceName, map[string]string{
+		"label": labelName,
+		"image": "./aws/icons/db.png",
+		"width": "1",
+		"height": "1",
+		"fixedsize": "true",
+		"shape": "none",
+	})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 // InitiateVariablesAndResources parses TF file to create Variables / Obj references for interpolation
 func InitiateVariablesAndResources(tfModule *tfconfigs.Module) (*hcl2.EvalContext, error) {
 	// Create map for EvalContext to replace variables names by their values inside HCL file using DecodeBody
@@ -305,6 +357,8 @@ func InitiateVariablesAndResources(tfModule *tfconfigs.Module) (*hcl2.EvalContex
 	ctxAwsSubnet := make(map[string]cty.Value)
 	ctxAwsInstance := make(map[string]cty.Value)
 	ctxAwsSecurityGroup := make(map[string]cty.Value)
+	ctxDBInstance := make(map[string]cty.Value)
+	ctxDBSubnetGroup := make(map[string]cty.Value)
 
 	// Prepare context with TF variables
 	for _, v := range tfModule.Variables {
@@ -361,6 +415,14 @@ func InitiateVariablesAndResources(tfModule *tfconfigs.Module) (*hcl2.EvalContex
 			ctxAwsSecurityGroup[v.Name] = cty.ObjectVal(map[string]cty.Value{
 				"id":    cty.StringVal(v.Type + "." + v.Name),
 				})
+		} else if v.Type == "aws_db_instance" {
+			ctxDBInstance[v.Name] = cty.ObjectVal(map[string]cty.Value{
+				"id":    cty.StringVal(v.Type + "." + v.Name),
+				})
+		} else if v.Type == "aws_db_subnet_group" {
+			ctxDBSubnetGroup[v.Name] = cty.ObjectVal(map[string]cty.Value{
+				"id":    cty.StringVal(v.Type + "." + v.Name),
+				})
 		}
 	}
 	
@@ -371,6 +433,8 @@ func InitiateVariablesAndResources(tfModule *tfconfigs.Module) (*hcl2.EvalContex
 			"aws_subnet" : cty.ObjectVal(ctxAwsSubnet),
 			"aws_instance" : cty.ObjectVal(ctxAwsInstance),
 			"aws_security_group" : cty.ObjectVal(ctxAwsSecurityGroup),
+			"aws_db_instance" : cty.ObjectVal(ctxDBInstance),
+			"aws_db_subnet_group" : cty.ObjectVal(ctxDBSubnetGroup),
 		},
 	}
 	return ctx, nil
@@ -502,6 +566,17 @@ func (a *Data) ParseTfResources(tfModule *tfconfigs.Module, ctx *hcl2.EvalContex
 			// Add DBInstance to Data
 			a.DBInstance[v.Name] = awsDBInstance
 
+		case "aws_db_subnet_group":
+			if Verbose == true {
+				fmt.Printf("[VERBOSE] Decoding %s.%s\n", v.Type, v.Name)
+			}
+			var awsDBSubnetGroup DBSubnetGroup
+			diags := gohcl.DecodeBody(v.Config, ctx, &awsDBSubnetGroup)
+			utils.PrintDiags(diags)
+			
+			// Add DBSubnetGroup to Data
+			a.DBSubnetGroup[v.Name] = awsDBSubnetGroup
+
 		default:
 			if Verbose == true {
 				fmt.Printf("[VERBOSE] Can't decode %s.%s (not yet supported)\n", v.Type, v.Name)
@@ -534,6 +609,14 @@ func (a *Data) CreateGraphNodes(graph *gographviz.Escape) (error) {
 	// Add Instance nodes to graph
 	for instanceName, instanceObj := range a.Instance {
 		err := createInstance(graph, instanceName, instanceObj)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Add DB Instance nodes to graph
+	for instanceName, instanceObj := range a.DBInstance {
+		err := a.createDBInstance(graph, instanceName, instanceObj)
 		if err != nil {
 			return err
 		}

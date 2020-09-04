@@ -69,6 +69,8 @@ func main() {
 		Subnet:				make(map[string]aws.Subnet),
 		Instance:			make(map[string]aws.Instance),
 		SecurityGroup:		make(map[string]aws.SecurityGroup),
+		DBInstance:			make(map[string]aws.DBInstance),
+		DBSubnetGroup:		make(map[string]aws.DBSubnetGroup),
 		SecurityGroupNodeLinks:		make(map[string][]string),
 	}
 

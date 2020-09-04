@@ -4,4 +4,10 @@ fileignoreconfig:
 - filename: tests/tf_0.12/ankyit/main.tf
   checksum: 59a5ff1393025923718332e5a6425e045492d2baf4dd2e312bfbd7186253f350
   ignore_detectors: []
+- filename: tests/tf_0_12/rds/terraform.template.tfvars
+  checksum: 21372d66f6b70df6123ec68cd73f7972881cacf1a3945d7c1fdb14b0ba764a5c
+  ignore_detectors: []
+- filename: tests/tf_0_12/rds/main.tf
+  checksum: 7b08dce2278fced1282e8a000b7352611b58a888c4b19ab09bc778f78b2e2e6d
+  ignore_detectors: []
 scopeconfig: []
