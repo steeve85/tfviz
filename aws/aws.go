@@ -41,6 +41,7 @@ type Data struct {
 	Subnet					map[string]Subnet
 	Instance				map[string]Instance
 	SecurityGroup			map[string]SecurityGroup
+	ELB						map[string]ELB
 	// list of security groups not defined in the TF module
 	undefinedSecurityGroups		[]string
 	// map of resources linked to a security group
@@ -81,6 +82,26 @@ type Instance struct {
 	SubnetID				*string `hcl:"subnet_id"`
 	// Other arguments
 	Remain					hcl2.Body `hcl:",remain"`
+}
+
+// ELB is a structure for AWS ELB resources
+type ELB struct {
+	// The Availability Zones to serve traffic in
+	AvailabilityZones		[]string `hcl:"availability_zones"`
+	// A list of security group IDs to assign to the ELB. Only valid if creating an ELB within a VPC
+	SecurityGroups			[]string `hcl:"security_groups"`
+	// A list of subnet IDs to attach to the ELB.
+	Subnets					[]string `hcl:"subnets"`
+	// A list of instance ids to place in the ELB pool.
+	Instances 				[]string `hcl:"instances"`
+	// A list of listener blocks
+	Listener				[]Listener `hcl:"listener,block"`
+	// Other arguments
+	Remain					hcl2.Body `hcl:",remain"`
+}
+
+type Listener struct {
+
 }
 
 // SecurityGroup is a structure for AWS Security Group resources
@@ -467,7 +488,18 @@ func (a *Data) ParseTfResources(tfModule *tfconfigs.Module, ctx *hcl2.EvalContex
 
 			// Add SecurityGroup to Data
 			a.SecurityGroup["aws_security_group."+v.Name] = awsSecurityGroup
-		
+
+		case "aws_elb":
+			if Verbose == true {
+				fmt.Printf("[VERBOSE] Decoding %s.%s\n", v.Type, v.Name)
+			}
+			var awsELB ELB
+			diags := gohcl.DecodeBody(v.Config, ctx, &awsELB)
+			utils.PrintDiags(diags)
+
+			// Add ELB to Data
+			a.ELB[v.Name] = awsELB
+
 		default:
 			if Verbose == true {
 				fmt.Printf("[VERBOSE] Can't decode %s.%s (not yet supported)\n", v.Type, v.Name)
