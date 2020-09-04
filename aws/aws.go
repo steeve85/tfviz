@@ -40,6 +40,7 @@ type Data struct {
 	Vpc						map[string]Vpc
 	Subnet					map[string]Subnet
 	Instance				map[string]Instance
+	DBInstance				map[string]DBInstance
 	SecurityGroup			map[string]SecurityGroup
 	// list of security groups not defined in the TF module
 	undefinedSecurityGroups		[]string
@@ -67,7 +68,7 @@ type Subnet struct {
 	Remain					hcl2.Body `hcl:",remain"`
 }
 
-// Instance is a structure for AWS EC2 instances resources
+// Instance is a structure for AWS EC2 instance resources
 type Instance struct {
 	// The type of instance to start
 	InstanceType			string `hcl:"instance_type"`
@@ -79,6 +80,28 @@ type Instance struct {
 	VpcSecurityGroupIDs		*[]string `hcl:"vpc_security_group_ids"`
 	// The VPC Subnet ID to launch in
 	SubnetID				*string `hcl:"subnet_id"`
+	// Other arguments
+	Remain					hcl2.Body `hcl:",remain"`
+}
+
+// DBInstance is a structure for AWS RDS instance resources
+type DBInstance struct {
+	// The allocated storage in Gb
+	AllocatedStorage		*int `hcl:"allocated_storage"`
+	// Name of DB subnet group
+	DBSubnetGroupName 		*string `hcl:"db_subnet_group_name"`
+	// The database engine to use
+	Engine					*string `hcl:"engine"`
+	// The instance type of the RDS instance
+	InstanceClass			*string `hcl:"instance_class"`
+	// Password for the master DB user
+	Password				*string `hcl:"password"`
+	// Bool to control if instance is publicly accessible
+	PubliclyAccessible		*bool `hcl:"publicly_accessible"`
+	// Username for the master DB user
+	Username				*string `hcl:"username"`
+	// List of VPC security groups to associate
+	VpcSecurityGroupIDs		*[]string `hcl:"vpc_security_group_ids"`
 	// Other arguments
 	Remain					hcl2.Body `hcl:",remain"`
 }
@@ -467,7 +490,18 @@ func (a *Data) ParseTfResources(tfModule *tfconfigs.Module, ctx *hcl2.EvalContex
 
 			// Add SecurityGroup to Data
 			a.SecurityGroup["aws_security_group."+v.Name] = awsSecurityGroup
-		
+
+		case "aws_db_instance":
+			if Verbose == true {
+				fmt.Printf("[VERBOSE] Decoding %s.%s\n", v.Type, v.Name)
+			}
+			var awsDBInstance DBInstance
+			diags := gohcl.DecodeBody(v.Config, ctx, &awsDBInstance)
+			utils.PrintDiags(diags)
+			
+			// Add DBInstance to Data
+			a.DBInstance[v.Name] = awsDBInstance
+
 		default:
 			if Verbose == true {
 				fmt.Printf("[VERBOSE] Can't decode %s.%s (not yet supported)\n", v.Type, v.Name)
