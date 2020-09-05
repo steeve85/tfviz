@@ -1,3 +1,5 @@
+// Ref: https://github.com/terraform-providers/terraform-provider-aws/tree/master/examples/rds
+
 terraform {
   required_version = ">= 0.12"
 }
