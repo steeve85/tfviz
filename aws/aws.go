@@ -926,8 +926,10 @@ func (a *Data) CreateGraphEdges(graph *gographviz.Escape) (error) {
 
 // PrintUnsupportedResources displays all resources currently unsupported by tfviz
 func (a *Data) PrintUnsupportedResources() {
-	fmt.Println("[WARNING] Unsupported resources:")
-	for _, r := range a.unsupportedResources {
-		fmt.Println(" -", r)
+	if len(a.unsupportedResources) > 0 {
+		fmt.Println("[WARNING] Unsupported resources:")
+		for _, r := range a.unsupportedResources {
+			fmt.Println(" -", r)
+		}
 	}
 }
