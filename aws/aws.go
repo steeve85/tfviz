@@ -335,8 +335,15 @@ func (a *Data) createDBInstance(graph *gographviz.Escape, instanceName string, a
 		labelName = instanceName
 	}
 
+	fontColor := "black"
+	// DB is publicly available, so setting label color as red
+	if awsInstance.PubliclyAccessible != nil && *awsInstance.PubliclyAccessible == true {
+		fontColor = "red"
+	}
+
 	err := graph.AddNode("cluster_"+clusterID, "aws_db_instance_"+instanceName, map[string]string{
 		"label": labelName,
+		"fontcolor": fontColor,
 		"image": "./aws/icons/db.png",
 		"width": "1",
 		"height": "1",
@@ -565,6 +572,19 @@ func (a *Data) ParseTfResources(tfModule *tfconfigs.Module, ctx *hcl2.EvalContex
 			
 			// Add DBInstance to Data
 			a.DBInstance[v.Name] = awsDBInstance
+
+			if awsDBInstance.VpcSecurityGroupIDs != nil {
+				fmt.Println("DEBUG (awsDBInstance.VpcSecurityGroupIDs):", *awsDBInstance.VpcSecurityGroupIDs)
+				for _, sg := range *awsDBInstance.VpcSecurityGroupIDs {
+					_, found := a.SecurityGroupNodeLinks[sg]
+					if found {
+						a.SecurityGroupNodeLinks[sg] = append(a.SecurityGroupNodeLinks[sg], v.Type+"."+v.Name)
+					} else {
+						a.SecurityGroupNodeLinks[sg] = []string{v.Type+"."+v.Name}
+					}
+					fmt.Println("DEBUG (a.SecurityGroupNodeLinks[sg]):", a.SecurityGroupNodeLinks[sg])
+				}
+			}
 
 		case "aws_db_subnet_group":
 			if Verbose == true {
@@ -866,7 +886,6 @@ func (a *Data) CreateGraphEdges(graph *gographviz.Escape) (error) {
 		}
 		// The instance has at least one SG attached to it
 		for _, sg := range SGs {
-
 			// Parse Ingress SG rules
 			if !IgnoreIngress {
 				a.parseSGRule(ingressRule, "aws_instance_"+instanceName, sg, graph)
@@ -875,6 +894,29 @@ func (a *Data) CreateGraphEdges(graph *gographviz.Escape) (error) {
 			// Parse Egress SG rules
 			if !IgnoreEgress {
 				a.parseSGRule(egressRule, "aws_instance_"+instanceName, sg, graph)
+			}
+		}
+	}
+
+	// Link DB Instances with their Security Groups
+	for instanceName, instanceObj := range a.DBInstance {
+
+		// Get the Security Groups of the DB instance
+		var SGs []string
+		if instanceObj.VpcSecurityGroupIDs != nil {
+			SGs = append(SGs, *instanceObj.VpcSecurityGroupIDs...)
+		}
+
+		// The instance has at least one SG attached to it
+		for _, sg := range SGs {
+			// Parse Ingress SG rules
+			if !IgnoreIngress {
+				a.parseSGRule(ingressRule, "aws_db_instance_"+instanceName, sg, graph)
+			}
+
+			// Parse Egress SG rules
+			if !IgnoreEgress {
+				a.parseSGRule(egressRule, "aws_db_instance_"+instanceName, sg, graph)
 			}
 		}
 	}
