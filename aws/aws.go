@@ -175,14 +175,30 @@ type AutoscalingAttachment struct {
 	AlbTargetGroupArn		*string `hcl:"alb_target_group_arn"`
 }
 
+// LaunchConfiguration structure is used to create a new launch configuration, used for autoscaling groups
+type LaunchConfiguration struct {
+	// The size of instance to launch
+	InstanceType			string `hcl:"instance_type"`
+	// The EC2 image ID to launch
+	ImageID						string `hcl:"image_id"`
+	// A list of associated security group IDS
+	SecurityGroups			*[]string `hcl:"security_groups"`
+	// Other arguments
+	Remain					hcl2.Body `hcl:",remain"`
+}
+
 // AutoscalingGroup is used to define an AutoScaling Group resource
 type AutoscalingGroup struct {
 	// The maximum size of the auto scale group
 	MaxSize					int `hcl:"max_size"`
 	// The minimum size of the auto scale group
 	MinSize					int `hcl:"min_size"`
+	// The name of the launch configuration to use
+	LaunchConfiguration		*string `hcl:"launch_configuration"`
 	// A set of aws_alb_target_group ARNs, for use with Application or Network Load Balancing
 	TargetGroupArns			*[]string `hcl:"target_group_arns"`
+	// Other arguments
+	Remain					hcl2.Body `hcl:",remain"`
 }
 
 // SecurityGroup is a structure for AWS Security Group resources
