@@ -115,6 +115,76 @@ type DBSubnetGroup struct {
 	Remain					hcl2.Body `hcl:",remain"`
 }
 
+// LB is a structure for Load Balancer resources
+type LB struct {
+	// The type of load balancer to create. Possible values are 'application' or 'network'
+	LoadBalancerType		*string `hcl:"load_balancer_type"`
+	// A list of security group IDs to assign to the LB. Only valid for Load Balancers of type 'application'
+	SecurityGroups			*[]string `hcl:"security_groups"`
+	// A list of subnet IDs to attach to the LB
+	Subnets					*[]string `hcl:"subnets"`
+	// Other arguments
+	Remain					hcl2.Body `hcl:",remain"`
+}
+
+// LBListener is a structure for Load Balancer Listener resources
+type LBListener struct {
+	// The ARN of the load balancer
+	LoadBalancerARN			string `hcl:"load_balancer_arn"`
+	// An Action block
+	DefaultAction			LBAction `hcl:"default_action,block"`
+	// Other arguments
+	Remain					hcl2.Body `hcl:",remain"`
+}
+
+// LBAction is used to define Action blocks for Load Balancers
+type LBAction struct {
+	// The type of routing action
+	Type					string `hcl:"type"`
+	// The ARN of the Target Group to which to route traffic
+	TargetGroupARN			string `hcl:"target_group_arn"`
+	// TODO: might add 'forward' field and block later
+	// Other arguments
+	Remain					hcl2.Body `hcl:",remain"`
+}
+
+// LBTargetGroup is used to define a Target Group resource for use with Load Balancer resources
+type LBTargetGroup struct {
+	// Other arguments
+	Remain					hcl2.Body `hcl:",remain"`
+}
+
+
+// LBTargetGroupAttachment is used to have the ability to register instances and containers with an Application Load Balancer (ALB) 
+type LBTargetGroupAttachment struct {
+	// The ARN of the target group with which to register targets
+	TargetGroupArn			string `hcl:"target_group_arn"`
+	// The ID of the target
+	TargetID				string `hcl:"target_id"`
+	// Other arguments
+	Remain					hcl2.Body `hcl:",remain"`
+}
+
+// AutoscalingAttachment is used to define an AutoScaling Attachment resource
+type AutoscalingAttachment struct {
+	// Name of ASG to associate with the ELB
+	AutoscalingGroupName	string `hcl:"autoscaling_group_name"`
+	// The name of the ELB
+	Elb						*string `hcl:"elb"`
+	// The ARN of an ALB Target Group
+	AlbTargetGroupArn		*string `hcl:"alb_target_group_arn"`
+}
+
+// AutoscalingGroup is used to define an AutoScaling Group resource
+type AutoscalingGroup struct {
+	// The maximum size of the auto scale group
+	MaxSize					int `hcl:"max_size"`
+	// The minimum size of the auto scale group
+	MinSize					int `hcl:"min_size"`
+	// A set of aws_alb_target_group ARNs, for use with Application or Network Load Balancing
+	TargetGroupArns			*[]string `hcl:"target_group_arns"`
+}
+
 // SecurityGroup is a structure for AWS Security Group resources
 type SecurityGroup struct {
 	// The VPC ID
