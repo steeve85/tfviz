@@ -144,3 +144,23 @@ func Find(slice []string, val string) (int, bool) {
     }
     return -1, false
 }
+
+// ChunkString splits a string into chunks of X characters
+// https://stackoverflow.com/a/48479355
+func ChunkString(s string, chunkSize int) []string {
+	var chunks []string
+	runes := []rune(s)
+
+	if len(runes) == 0 {
+		return []string{s}
+	}
+
+	for i := 0; i < len(runes); i += chunkSize {
+		nn := i + chunkSize
+		if nn > len(runes) {
+			nn = len(runes)
+		}
+		chunks = append(chunks, string(runes[i:nn]))
+	}
+	return chunks
+}

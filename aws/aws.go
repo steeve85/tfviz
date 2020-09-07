@@ -43,6 +43,8 @@ type Data struct {
 	DBInstance				map[string]DBInstance
 	DBSubnetGroup 			map[string]DBSubnetGroup
 	SecurityGroup			map[string]SecurityGroup
+	LB						map[string]LB
+	ASG						map[string]AutoscalingGroup
 	// list of security groups not defined in the TF module
 	undefinedSecurityGroups		[]string
 	// map of resources linked to a security group
@@ -197,6 +199,10 @@ type AutoscalingGroup struct {
 	LaunchConfiguration		*string `hcl:"launch_configuration"`
 	// A set of aws_alb_target_group ARNs, for use with Application or Network Load Balancing
 	TargetGroupArns			*[]string `hcl:"target_group_arns"`
+	// A list of subnet IDs to launch resources in
+	VPCZoneIdentifier		*[]string `hcl:"vpc_zone_identifier"`
+	// TODO:
+	// Implement 'launch_template' and 'mixed_instances_policy'
 	// Other arguments
 	Remain					hcl2.Body `hcl:",remain"`
 }
@@ -392,7 +398,6 @@ func createInstance(graph *gographviz.Escape, instanceName string, awsInstance I
 	return nil
 }
 
-
 func (a *Data) createDBInstance(graph *gographviz.Escape, instanceName string, awsInstance DBInstance) (error) {
 	// Create DB instance node
 	var clusterID string
@@ -405,21 +410,20 @@ func (a *Data) createDBInstance(graph *gographviz.Escape, instanceName string, a
 		// - how to show a DB in multiple subnets?
 		// - can a node be part of 2 subgraph (in graphviz)?
 		// For now, only the first one is used
+		fmt.Println("*awsInstance.DBSubnetGroupName", *awsInstance.DBSubnetGroupName)
 		tmpDBname := strings.Split(*awsInstance.DBSubnetGroupName, ".")[1]
+		fmt.Println("a.DBSubnetGroup", a.DBSubnetGroup)
 		tmpSubnetName := strings.Split(a.DBSubnetGroup[tmpDBname].SubnetIDs[0], ".")[1]
-		clusterID = "aws_vpc_" + a.Subnet[tmpSubnetName].VpcID
+		fmt.Println("tmpSubnetName", tmpSubnetName)
+		fmt.Println("tmpSubnetName VPC", a.Subnet[tmpSubnetName].VpcID)
+		clusterID = strings.Replace(a.Subnet[tmpSubnetName].VpcID, ".", "_", -1)
 	}
 	if Verbose == true {
 		fmt.Printf("[VERBOSE] AddNode: aws_db_instance_%s to cluster_%s // Create DB Instance\n", instanceName, clusterID)
 	}
 
 	// Splitting label if more than 8 chars
-	re := regexp.MustCompile(`(\S{8})`)
-	labelName := strings.Join(re.FindAllString(instanceName, -1), "\\n")
-	// If instanceName is shorter than 8, labelName needs to be manually set, otherwise the string will be empty
-	if labelName == "" {
-		labelName = instanceName
-	}
+	labelName := strings.Join(utils.ChunkString(instanceName, 8), "\n")
 
 	fontColor := "black"
 	// DB is publicly available, so setting label color as red
@@ -442,6 +446,83 @@ func (a *Data) createDBInstance(graph *gographviz.Escape, instanceName string, a
 	return nil
 }
 
+func (a *Data) createALB(graph *gographviz.Escape, instanceName string, awsLB LB) (error) {
+	// Create ALB node
+	var clusterID string
+	// if there is no Subnet, the ALB is created in the default subnet
+	// same if there is no subnet defined in the TF module
+	if awsLB.Subnets == nil || len(a.Subnet) == 0{
+		clusterID = "aws_subnet_default"
+	} else {
+		// TODO: support multiple subnets
+		// - how to show a LB in multiple subnets?
+		// - can a node be part of 2 subgraph (in graphviz)?
+		// For now, only the first one is used
+		tmpSubnetName := strings.Split((*awsLB.Subnets)[0], ".")[1]
+		clusterID = "aws_subnet_" + tmpSubnetName
+	}
+
+	if Verbose == true {
+		fmt.Printf("[VERBOSE] AddNode: aws_lb_%s to cluster_%s // Create ALB\n", instanceName, clusterID)
+	}
+
+	// Splitting label if more than 8 chars
+	labelName := strings.Join(utils.ChunkString(instanceName, 8), "\n")
+
+	err := graph.AddNode("cluster_"+clusterID, "aws_lb_"+instanceName, map[string]string{
+		"label": labelName,
+		"image": "./aws/icons/alb.png",
+		"width": "1",
+		"height": "1",
+		"fixedsize": "true",
+		"shape": "none",
+	})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (a *Data) createASG(graph *gographviz.Escape, instanceName string, awsASG AutoscalingGroup) (error) {
+	// Create ASG node
+	var clusterID string
+	// if there is no Subnet, the ASG is created in the default subnet
+	// same if there is no subnet defined in the TF module
+	if awsASG.VPCZoneIdentifier == nil || len(a.Subnet) == 0{
+		clusterID = "aws_subnet_default"
+	} else {
+		// TODO: support multiple subnets
+		// - how to show a LB in multiple subnets?
+		// - can a node be part of 2 subgraph (in graphviz)?
+		// For now, only the first one is used
+		tmpSubnetName := strings.Split((*awsASG.VPCZoneIdentifier)[0], ".")[1]
+		clusterID = "aws_subnet_" + tmpSubnetName
+	}
+
+	if Verbose == true {
+		fmt.Printf("[VERBOSE] AddNode: aws_autoscaling_group_%s to cluster_%s // Create ASG\n", instanceName, clusterID)
+	}
+
+	// Splitting label if more than 8 chars
+	fmt.Println("DEBUG instanceName =>", instanceName)
+	
+	labelName := strings.Join(utils.ChunkString(instanceName, 8), "\n")
+	fmt.Println("DEBUG labelName =>", labelName)
+
+	err := graph.AddNode("cluster_"+clusterID, "aws_autoscaling_group_"+instanceName, map[string]string{
+		"label": labelName,
+		"image": "./aws/icons/asg.png",
+		"width": "1",
+		"height": "1",
+		"fixedsize": "true",
+		"shape": "none",
+	})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 // InitiateVariablesAndResources parses TF file to create Variables / Obj references for interpolation
 func InitiateVariablesAndResources(tfModule *tfconfigs.Module) (*hcl2.EvalContext, error) {
 	// Create map for EvalContext to replace variables names by their values inside HCL file using DecodeBody
@@ -452,6 +533,8 @@ func InitiateVariablesAndResources(tfModule *tfconfigs.Module) (*hcl2.EvalContex
 	ctxAwsSecurityGroup := make(map[string]cty.Value)
 	ctxDBInstance := make(map[string]cty.Value)
 	ctxDBSubnetGroup := make(map[string]cty.Value)
+	ctxLB := make(map[string]cty.Value)
+	ctxASG := make(map[string]cty.Value)
 
 	// Prepare context with TF variables
 	for _, v := range tfModule.Variables {
@@ -516,6 +599,14 @@ func InitiateVariablesAndResources(tfModule *tfconfigs.Module) (*hcl2.EvalContex
 			ctxDBSubnetGroup[v.Name] = cty.ObjectVal(map[string]cty.Value{
 				"id":    cty.StringVal(v.Type + "." + v.Name),
 				})
+		} else if v.Type == "aws_lb" || v.Type == "aws_alb" {
+			ctxLB[v.Name] = cty.ObjectVal(map[string]cty.Value{
+				"id":    cty.StringVal(v.Type + "." + v.Name),
+				})
+		} else if v.Type == "aws_autoscaling_group" {
+			ctxASG[v.Name] = cty.ObjectVal(map[string]cty.Value{
+				"id":    cty.StringVal(v.Type + "." + v.Name),
+				})
 		}
 	}
 	
@@ -528,8 +619,14 @@ func InitiateVariablesAndResources(tfModule *tfconfigs.Module) (*hcl2.EvalContex
 			"aws_security_group" : cty.ObjectVal(ctxAwsSecurityGroup),
 			"aws_db_instance" : cty.ObjectVal(ctxDBInstance),
 			"aws_db_subnet_group" : cty.ObjectVal(ctxDBSubnetGroup),
+			"aws_alb" : cty.ObjectVal(ctxLB),	// aws_lb and aws_alb are the same
+			"aws_lb" : cty.ObjectVal(ctxLB),
+			"aws_autoscaling_group" : cty.ObjectVal(ctxASG),
 		},
 	}
+
+
+	fmt.Println("CTX:", ctx)
 	return ctx, nil
 }
 
@@ -680,8 +777,36 @@ func (a *Data) ParseTfResources(tfModule *tfconfigs.Module, ctx *hcl2.EvalContex
 			diags := gohcl.DecodeBody(v.Config, ctx, &awsDBSubnetGroup)
 			utils.PrintDiags(diags)
 			
+			fmt.Println("DEBUG =>", awsDBSubnetGroup)
 			// Add DBSubnetGroup to Data
 			a.DBSubnetGroup[v.Name] = awsDBSubnetGroup
+
+		case "aws_alb", "aws_lb":
+			if Verbose == true {
+				fmt.Printf("[VERBOSE] Decoding %s.%s\n", v.Type, v.Name)
+			}
+			var awsLB LB
+			diags := gohcl.DecodeBody(v.Config, ctx, &awsLB)
+			utils.PrintDiags(diags)
+			
+			// Add LB to Data
+			if awsLB.LoadBalancerType == nil || *awsLB.LoadBalancerType == "application" {
+				a.LB[v.Name] = awsLB
+			} else {
+				fmt.Println("[VERBOSE] Network Load Balancer is not yet supported")
+			}
+			
+
+		case "aws_autoscaling_group":
+			if Verbose == true {
+				fmt.Printf("[VERBOSE] Decoding %s.%s\n", v.Type, v.Name)
+			}
+			var awsASG AutoscalingGroup
+			diags := gohcl.DecodeBody(v.Config, ctx, &awsASG)
+			utils.PrintDiags(diags)
+			
+			// Add ASG to Data
+			a.ASG[v.Name] = awsASG
 
 		default:
 			if Verbose == true {
@@ -723,6 +848,22 @@ func (a *Data) CreateGraphNodes(graph *gographviz.Escape) (error) {
 	// Add DB Instance nodes to graph
 	for instanceName, instanceObj := range a.DBInstance {
 		err := a.createDBInstance(graph, instanceName, instanceObj)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Add ALB nodes to graph
+	for lbName, lbObj := range a.LB {
+		err := a.createALB(graph, lbName, lbObj)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Add ASG nodes to graph
+	for asgName, asgObj := range a.ASG {
+		err := a.createASG(graph, asgName, asgObj)
 		if err != nil {
 			return err
 		}
@@ -793,7 +934,9 @@ func (a *Data) parseSGRule(ruleType int, nodeName string, sgName string, graph *
 		}
 	}
 	for _, rule := range sgRule {
-		if *rule.CidrBlocks != nil {
+		fmt.Println("DEBUG RULE =>", rule)
+		fmt.Println("DEBUG RULE =>", rule.CidrBlocks)
+		if rule.CidrBlocks != nil {
 			for _, cidr := range *rule.CidrBlocks {
 				// Special ingress/egress rule for 0.0.0.0/0
 				if cidr == "0.0.0.0/0" {
