@@ -6,7 +6,6 @@ import (
 	"net"
 	"os"
 	"path"
-	"regexp"
 	"strings"
 
 	tfconfigs "github.com/hashicorp/terraform/configs"
@@ -43,6 +42,7 @@ type Data struct {
 	DBInstance				map[string]DBInstance
 	DBSubnetGroup 			map[string]DBSubnetGroup
 	SecurityGroup			map[string]SecurityGroup
+	S3						map[string]S3
 	// list of security groups not defined in the TF module
 	undefinedSecurityGroups		[]string
 	// map of resources linked to a security group
@@ -143,6 +143,12 @@ type SGRule struct {
 	IPv6CidrBlocks			*[]string `hcl:"ipv6_cidr_blocks"`
 	// List of security group Group Names if using EC2-Classic, or Group IDs if using a VPC
 	SecurityGroups			*[]string `hcl:"security_groups"`
+	// Other arguments
+	Remain					hcl2.Body `hcl:",remain"`
+}
+
+// S3 is a structure for AWS S3 bucket resources
+type S3 struct {
 	// Other arguments
 	Remain					hcl2.Body `hcl:",remain"`
 }
@@ -272,6 +278,29 @@ func createSubnet(graph *gographviz.Escape, subnetName string, awsSubnet Subnet)
 	return nil
 }
 
+func createS3(graph *gographviz.Escape, s3Name string) (error) {
+	// Create S3 bucket node
+	if Verbose == true {
+		fmt.Printf("[VERBOSE] AddNode: aws_s3_bucket_%s to G // Create S3 bucket\n", s3Name)
+	}
+
+	// Splitting label if more than 8 chars
+	labelName := strings.Join(utils.ChunkString(s3Name, 8), "\n")
+
+	err := graph.AddNode("G", "aws_s3_bucket_"+s3Name, map[string]string{
+		"label": labelName,
+		"image": "./aws/icons/s3.png",
+		"width": "1",
+		"height": "1",
+		"fixedsize": "true",
+		"shape": "none",
+	})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func createInstance(graph *gographviz.Escape, instanceName string, awsInstance Instance) (error) {
 	// Create instance node
 	var clusterID string
@@ -285,12 +314,7 @@ func createInstance(graph *gographviz.Escape, instanceName string, awsInstance I
 	}
 
 	// Splitting label if more than 8 chars
-	re := regexp.MustCompile(`(\S{8})`)
-	labelName := strings.Join(re.FindAllString(instanceName, -1), "\\n")
-	// If instanceName is shorter than 8, labelName needs to be manually set, otherwise the string will be empty
-	if labelName == "" {
-		labelName = instanceName
-	}
+	labelName := strings.Join(utils.ChunkString(instanceName, 8), "\n")
 
 	err := graph.AddNode("cluster_"+clusterID, "aws_instance_"+instanceName, map[string]string{
 		"label": labelName,
@@ -328,12 +352,7 @@ func (a *Data) createDBInstance(graph *gographviz.Escape, instanceName string, a
 	}
 
 	// Splitting label if more than 8 chars
-	re := regexp.MustCompile(`(\S{8})`)
-	labelName := strings.Join(re.FindAllString(instanceName, -1), "\\n")
-	// If instanceName is shorter than 8, labelName needs to be manually set, otherwise the string will be empty
-	if labelName == "" {
-		labelName = instanceName
-	}
+	labelName := strings.Join(utils.ChunkString(instanceName, 8), "\n")
 
 	fontColor := "black"
 	// DB is publicly available, so setting label color as red
@@ -596,6 +615,17 @@ func (a *Data) ParseTfResources(tfModule *tfconfigs.Module, ctx *hcl2.EvalContex
 			
 			// Add DBSubnetGroup to Data
 			a.DBSubnetGroup[v.Name] = awsDBSubnetGroup
+		
+		case "aws_s3_bucket":
+			if Verbose == true {
+				fmt.Printf("[VERBOSE] Decoding %s.%s\n", v.Type, v.Name)
+			}
+			var awsS3 S3
+			diags := gohcl.DecodeBody(v.Config, ctx, &awsS3)
+			utils.PrintDiags(diags)
+			
+			// Add S3 to Data
+			a.S3[v.Name] = awsS3
 
 		default:
 			if Verbose == true {
@@ -637,6 +667,14 @@ func (a *Data) CreateGraphNodes(graph *gographviz.Escape) (error) {
 	// Add DB Instance nodes to graph
 	for instanceName, instanceObj := range a.DBInstance {
 		err := a.createDBInstance(graph, instanceName, instanceObj)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Add S3 bucket nodes to graph
+	for S3Name := range a.S3 {
+		err := createS3(graph, S3Name)
 		if err != nil {
 			return err
 		}
@@ -707,7 +745,7 @@ func (a *Data) parseSGRule(ruleType int, nodeName string, sgName string, graph *
 		}
 	}
 	for _, rule := range sgRule {
-		if *rule.CidrBlocks != nil {
+		if rule.CidrBlocks != nil {
 			for _, cidr := range *rule.CidrBlocks {
 				// Special ingress/egress rule for 0.0.0.0/0
 				if cidr == "0.0.0.0/0" {

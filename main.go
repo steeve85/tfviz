@@ -71,6 +71,7 @@ func main() {
 		SecurityGroup:		make(map[string]aws.SecurityGroup),
 		DBInstance:			make(map[string]aws.DBInstance),
 		DBSubnetGroup:		make(map[string]aws.DBSubnetGroup),
+		S3:					make(map[string]aws.S3),
 		SecurityGroupNodeLinks:		make(map[string][]string),
 	}
 
