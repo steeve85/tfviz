@@ -6,7 +6,7 @@ Terraform is an amazing tool, but it can sometimes be hard to understand Terrafo
 
 Please test the tool and open Issues/PRs for feedbacks and contributions.
 
-**NB:** This project is at a MVP state. AWS services and Terraform files are complex and implementations errors might happen. Please use this project to help you visualize your Terraform infrastructure, but don't forget that the output might not be 100% correct.
+**NB:** This project is at an *alpha* state. AWS services and Terraform files are complex and implementations errors might happen. Please use this project to help you visualize your Terraform infrastructure, but don't forget that the output might not be 100% correct.
 
 ## Getting started
 
@@ -21,7 +21,7 @@ $ GO111MODULE=on go get -u github.com/steeve85/tfviz
 Then, you should be able to run **tfviz** from your terminal.
 
 
-## How to use tfviz?
+### How to use tfviz?
 
 **tfviz** is easy to use:
 
@@ -38,8 +38,6 @@ Then, you should be able to run **tfviz** from your terminal.
 
 This will generate the following graph output:
 ![](./vpc-subnet-ec2.png)
-
-
 
 By default, **tfviz** will try to show as much information as possible on the graph, but for complex infrastructure it might be too much information on the same graph. In that case, it is possible to disable some features like edges (egress / ingress rules).
 
