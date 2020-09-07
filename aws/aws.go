@@ -149,6 +149,8 @@ type SGRule struct {
 
 // S3 is a structure for AWS S3 bucket resources
 type S3 struct {
+	// The name of the bucket
+	Bucket					*string `hcl:"bucket"`
 	// Other arguments
 	Remain					hcl2.Body `hcl:",remain"`
 }
@@ -278,14 +280,18 @@ func createSubnet(graph *gographviz.Escape, subnetName string, awsSubnet Subnet)
 	return nil
 }
 
-func createS3(graph *gographviz.Escape, s3Name string) (error) {
+func createS3(graph *gographviz.Escape, s3Name string, s3 S3) (error) {
 	// Create S3 bucket node
 	if Verbose == true {
 		fmt.Printf("[VERBOSE] AddNode: aws_s3_bucket_%s to G // Create S3 bucket\n", s3Name)
 	}
 
 	// Splitting label if more than 8 chars
-	labelName := strings.Join(utils.ChunkString(s3Name, 8), "\n")
+	tmpLabel := s3Name
+	if s3.Bucket != nil && *s3.Bucket != "" {
+		tmpLabel = *s3.Bucket
+	}
+	labelName := strings.Join(utils.ChunkString(tmpLabel, 8), "\n")
 
 	err := graph.AddNode("G", "aws_s3_bucket_"+s3Name, map[string]string{
 		"label": labelName,
@@ -673,8 +679,8 @@ func (a *Data) CreateGraphNodes(graph *gographviz.Escape) (error) {
 	}
 
 	// Add S3 bucket nodes to graph
-	for S3Name := range a.S3 {
-		err := createS3(graph, S3Name)
+	for s3Name, s3Obj := range a.S3 {
+		err := createS3(graph, s3Name, s3Obj)
 		if err != nil {
 			return err
 		}
